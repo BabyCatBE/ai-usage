@@ -98,6 +98,8 @@
                                     Visibility="{Binding HasPlan, Converter={x:Static local:Conv.BoolToVisible}}">
                                 <TextBlock Text="{Binding Plan}" FontSize="10.5" Style="{StaticResource Dim}" FontWeight="SemiBold"/>
                             </Border>
+                            <TextBlock Text="{Binding StaleShort}" ToolTip="{Binding Notice}" Margin="8,2,0,0" FontSize="11" Foreground="{DynamicResource WarnBrush}" VerticalAlignment="Center"
+                                       Visibility="{Binding HasStale, Converter={x:Static local:Conv.BoolToVisible}}"/>
                             <TextBlock Text="★" Margin="8,0,0,0" FontSize="13" Foreground="{Binding AccentBrush}" VerticalAlignment="Center"
                                        Visibility="{Binding Pinned, Converter={x:Static local:Conv.BoolToVisible}}"/>
                         </StackPanel>

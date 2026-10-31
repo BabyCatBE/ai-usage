@@ -73,28 +73,44 @@ public sealed class UsageService : IDisposable
         finally { RefreshingChanged?.Invoke(false); }
     }
 
+    static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)];
+    static readonly HashSet<string> Transient = ["USAGE_UNAVAILABLE", "CLI_TIMEOUT", "RPC_FAILED", "CLI_EXITED", "CLI_WRITE_FAILED", "CLI_START_FAILED", "COLLECTION_FAILED", "AUTH_STATUS_INVALID"];
+
     static async Task<ProviderUsage> CollectOne(IUsageProvider provider, ProviderUsage? previous, CancellationToken ct)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(ProviderTimeout);
-        try
+        string code = "COLLECTION_FAILED";
+        for (var attempt = 1; attempt <= RetryDelays.Length + 1; attempt++)
         {
-            var r = await provider.CollectAsync(cts.Token);
-            return new ProviderUsage(provider.Id, provider.Name, ProviderStatus.Ok, DateTimeOffset.UtcNow, null, r.Plan, r.Windows, r.Models ?? [], r.Details ?? []);
-        }
-        catch (Exception e)
-        {
-            var code = e switch
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(ProviderTimeout);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
             {
-                UsageException u => u.Code,
-                OperationCanceledException when !ct.IsCancellationRequested => "CLI_TIMEOUT",
-                OperationCanceledException => "CANCELLED",
-                _ => "COLLECTION_FAILED",
-            };
-            if (previous is { HasData: true })
-                return previous with { Status = ProviderStatus.Stale, ErrorCode = code };
-            return new ProviderUsage(provider.Id, provider.Name, ProviderStatus.Error, previous?.FetchedAt, code, previous?.Plan, [], [], []);
+                var r = await provider.CollectAsync(cts.Token);
+                if (attempt > 1) DiagLog.Write(provider.Id, $"recovered on attempt {attempt} ({sw.ElapsedMilliseconds} ms)");
+                return new ProviderUsage(provider.Id, provider.Name, ProviderStatus.Ok, DateTimeOffset.UtcNow, null, r.Plan, r.Windows, r.Models ?? [], r.Details ?? []);
+            }
+            catch (Exception e)
+            {
+                code = e switch
+                {
+                    UsageException u => u.Code,
+                    OperationCanceledException when !ct.IsCancellationRequested => "CLI_TIMEOUT",
+                    OperationCanceledException => "CANCELLED",
+                    _ => "COLLECTION_FAILED",
+                };
+                DiagLog.Write(provider.Id, $"attempt {attempt} failed: {code} after {sw.ElapsedMilliseconds} ms ({e.GetType().Name}){(e is UsageException ? "" : ": " + e.Message)}");
+                if (attempt <= RetryDelays.Length && Transient.Contains(code) && !ct.IsCancellationRequested)
+                {
+                    try { await Task.Delay(RetryDelays[attempt - 1], ct); } catch (OperationCanceledException) { code = "CANCELLED"; break; }
+                    continue;
+                }
+                break;
+            }
         }
+        if (previous is { HasData: true })
+            return previous with { Status = ProviderStatus.Stale, ErrorCode = code };
+        return new ProviderUsage(provider.Id, provider.Name, ProviderStatus.Error, previous?.FetchedAt, code, previous?.Plan, [], [], []);
     }
 
     void Record(UsageSnapshot s)

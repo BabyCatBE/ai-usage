@@ -25,7 +25,11 @@ public sealed record ProviderVM(
     public bool Tight => ViewStyle == "mini";
     public Brush AccentBrush { get { var b = new SolidColorBrush(Accent); b.Freeze(); return b; } }
     public bool HasWindows => Windows.Count > 0;
-    public bool HasNotice => Notice is not null;
+    /// <summary>Errors without data keep their own row (the card has no windows, so the height is free).</summary>
+    public bool HasNotice => Notice is not null && !Stale;
+    /// <summary>Stale data is shown inline in the header, so the card height never changes when a reading fails.</summary>
+    public bool HasStale => Notice is not null && Stale;
+    public string StaleShort => "⚠ " + (Notice is { } n && n.Contains(" · ") ? n[(n.IndexOf(" · ") + 3)..] : Notice ?? "");
     public bool HasModels => ShowModels && Models.Count > 0;
     public bool HasPlan => Plan is not null;
     public string ModelsText => string.Join("  ·  ", Models.Select(m => m.Name + " " + m.Value));
