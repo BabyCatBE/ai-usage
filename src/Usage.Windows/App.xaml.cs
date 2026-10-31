@@ -59,7 +59,21 @@ public partial class App : Application
         SystemEvents.UserPreferenceChanged += (_, _) => Dispatcher.BeginInvoke(() => { if (state.Settings.Theme == "auto") { Theme.Apply(state.Settings); state.Rebuild(); } });
         SystemEvents.DisplaySettingsChanged += (_, _) => Dispatcher.BeginInvoke(() => widget?.ApplySettings());
 
+        // give memory back to Windows while the window is hidden (the widget and tray stay light)
+        var trimTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(90) };
+        trimTimer.Tick += (_, _) => { if (main is { IsVisible: false }) Trim(); };
+        trimTimer.Start();
+        main.IsVisibleChanged += (_, args) => { if (args.NewValue is false) _ = Task.Delay(3000).ContinueWith(_ => Dispatcher.BeginInvoke(Trim)); };
+        _ = Task.Delay(15000).ContinueWith(_ => Dispatcher.BeginInvoke(Trim));
+
         if (!e.Args.Contains("--background")) ShowMain();
+    }
+
+    [System.Runtime.InteropServices.DllImport("psapi.dll")] static extern bool EmptyWorkingSet(IntPtr process);
+    static void Trim()
+    {
+        GC.Collect(2, GCCollectionMode.Forced, true, true);
+        try { EmptyWorkingSet(System.Diagnostics.Process.GetCurrentProcess().Handle); } catch { }
     }
 
     public void ShowMain()

@@ -105,8 +105,8 @@ public static class Theme
             r["CardBack"] = B(Dark ? Color.FromArgb(0xE8, 0x0B, 0x10, 0x24) : Color.FromArgb(0xEE, 0xF4, 0xF7, 0xFF));
             r["CardFill"] = Frozen(new LinearGradientBrush(new GradientStopCollection { new(Dark ? Color.FromArgb(0x38, 255, 255, 255) : Color.FromArgb(0x99, 255, 255, 255), 0), new(Dark ? Color.FromArgb(0x12, 200, 220, 255) : Color.FromArgb(0x33, 200, 215, 255), 1) }, new Point(0, 0), new Point(1, 1)));
             r["CardBorder"] = Frozen(new LinearGradientBrush(new GradientStopCollection { new(Color.FromArgb(Dark ? (byte)0xA0 : (byte)0xFF, 255, 255, 255), 0), new(Dark ? Color.FromArgb(0x1C, 160, 190, 255) : Color.FromArgb(0x70, 150, 170, 220), 0.5), new(Color.FromArgb(Dark ? (byte)0x55 : (byte)0xC0, 255, 255, 255), 1) }, new Point(0, 0), new Point(1, 1)));
-            r["ShadowLight"] = Shadow(Colors.Transparent, -1, 1); r["ShadowDark"] = Shadow(Dark ? Colors.Black : Color.FromRgb(0x5B, 0x6F, 0xA8), 4, 26);
-            r["ShadowLightSm"] = Shadow(Colors.Transparent, -1, 1); r["ShadowDarkSm"] = Shadow(Dark ? Colors.Black : Color.FromRgb(0x5B, 0x6F, 0xA8), 2, 12);
+            // no blur effects in the glass look: each one costs an offscreen bitmap per element, the rim and fill carry the depth
+            r["ShadowLight"] = null; r["ShadowDark"] = null; r["ShadowLightSm"] = null; r["ShadowDarkSm"] = null;
         }
         else
         {
