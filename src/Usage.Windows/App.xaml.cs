@@ -43,11 +43,16 @@ public partial class App : Application
         showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\UsageMonitor.Show");
         if (!first) { showSignal.Set(); Shutdown(); return; }
 
+        // 30 fps is plenty for fades; it halves the animation cost on weak GPUs
+        System.Windows.Media.Animation.Timeline.DesiredFrameRateProperty.OverrideMetadata(typeof(System.Windows.Media.Animation.Timeline), new FrameworkPropertyMetadata(30));
         var settings = Settings.Load();
         Theme.Apply(settings);
         state = new AppState();
         Theme.Apply(state.Settings);
+        state.UiVisible = () => main is { IsVisible: true } || state.Settings.WidgetEnabled;
         main = new MainWindow(state) { Icon = IconSource() };
+        main.IsVisibleChanged += (_, _) => ApplyPerformance();
+        ApplyPerformance();
         if (state.Settings.StartWithWindows) Autostart.Set(true);
 
         BuildTray();
@@ -76,9 +81,18 @@ public partial class App : Application
         try { EmptyWorkingSet(System.Diagnostics.Process.GetCurrentProcess().Handle); } catch { }
     }
 
+    /// <summary>Low priority always (saver on); efficiency mode while the window is hidden.</summary>
+    public void ApplyPerformance()
+    {
+        if (state is null) return;
+        Power.Apply(state.Settings.PowerSaver, main is not { IsVisible: true });
+    }
+
     public void ShowMain()
     {
         if (main is null) return;
+        // coming back to the window: refresh if the numbers are old (cheaper than polling while it is hidden)
+        if (state is not null && !state.Service.IsRefreshing && (state.GeneratedAt is not { } g || DateTimeOffset.UtcNow - g > TimeSpan.FromMinutes(3))) _ = state.Service.RefreshAsync();
         main.Show();
         if (main.WindowState == WindowState.Minimized) main.WindowState = WindowState.Normal;
         main.Activate();

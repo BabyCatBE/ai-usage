@@ -5,8 +5,9 @@ using Usage.Core.Providers;
 
 namespace Usage.Windows;
 
-public sealed record WindowVM(string Id, string Label, string ShortLabel, double Percent, string PercentText, Color Accent, string Countdown, string ResetClock, double Elapsed, bool HasElapsed)
+public sealed record WindowVM(string Id, string Label, string ShortLabel, double Percent, string PercentText, Color Accent, string Countdown, string ResetClock, double Elapsed, bool HasElapsed, string ViewStyle = "bars", bool ShowReset = true)
 {
+    public string BarKind => ViewStyle == "segments" ? "segments" : "bar";
     public Brush AccentBrush { get { var b = new SolidColorBrush(Accent); b.Freeze(); return b; } }
     public string ResetLine => Loc.T("Reseta em ", "Resets in ") + Countdown + (ResetClock.Length > 0 ? " · " + ResetClock : "");
 }
@@ -16,12 +17,16 @@ public sealed record ModelVM(string Name, string Value);
 public sealed record ProviderVM(
     string Id, string Name, string? Plan, Color Accent, string? Notice, bool Stale, string UpdatedText,
     IReadOnlyList<WindowVM> Windows, IReadOnlyList<ModelVM> Models, IReadOnlyList<Detail> Details, IReadOnlyList<HistoryPoint> History,
-    string IconId = "generic", bool ShowIcon = true)
+    string IconId = "generic", bool ShowIcon = true, string ViewStyle = "bars", bool ShowReset = true, bool ShowModels = true, bool ShowUpdated = true, bool Pinned = false)
 {
+    /// <summary>Rings and big numbers sit side by side inside the card; bars and segments stack.</summary>
+    public bool Horizontal => ViewStyle is "rings" or "numbers";
+    /// <summary>Densest auto-fit layout: smaller card header.</summary>
+    public bool Tight => ViewStyle == "mini";
     public Brush AccentBrush { get { var b = new SolidColorBrush(Accent); b.Freeze(); return b; } }
     public bool HasWindows => Windows.Count > 0;
     public bool HasNotice => Notice is not null;
-    public bool HasModels => Models.Count > 0;
+    public bool HasModels => ShowModels && Models.Count > 0;
     public bool HasPlan => Plan is not null;
     public string ModelsText => string.Join("  ·  ", Models.Select(m => m.Name + " " + m.Value));
     public string Headline => string.Join("   ", Windows.Select(w => w.ShortLabel + " " + w.PercentText));
@@ -38,6 +43,8 @@ public sealed class AppState : IDisposable
     public DateTimeOffset? GeneratedAt { get; private set; }
     public bool Refreshing => Service.IsRefreshing;
     public event Action? Updated;
+    /// <summary>Set by the app: false when neither the window nor the widget is on screen (then no view-model is rebuilt).</summary>
+    public Func<bool>? UiVisible { get; set; }
     public Dictionary<string, bool> Online { get; } = [];
     readonly System.Windows.Threading.DispatcherTimer tick;
 
@@ -52,7 +59,8 @@ public sealed class AppState : IDisposable
         Service.RefreshingChanged += _ => Raise();
         Devices.Changed += Raise;
         tick = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-        tick.Tick += (_, _) => Rebuild();
+        tick.Tick += (_, _) => { if (UiVisible?.Invoke() != false) Rebuild(); };
+        Service.SkipAutoRefresh = () => Settings.PauseWhenIdle && Power.IdleSeconds() > 600;   // away from the PC for 10 min: do not wake the CLIs
         Rebuild();
     }
 
@@ -71,17 +79,24 @@ public sealed class AppState : IDisposable
         Rebuild();
     }
 
-    void Raise() => System.Windows.Application.Current?.Dispatcher.BeginInvoke(Rebuild);
+    void Raise() => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => { if (UiVisible?.Invoke() != false) Rebuild(); });
 
-    public void Rebuild()
+    /// <summary>Auto-fit level chosen by the window (not saved): 0 full, 1 no secondary lines, 2 one line per window.</summary>
+    public int FitLevel { get; set; }
+
+    public void Rebuild(bool raise = true)
     {
         var snap = Service.Current;
         var now = DateTimeOffset.UtcNow;
         GeneratedAt = snap?.GeneratedAt;
-        Providers = (snap?.Providers ?? [])
+        var pinned = Settings.PinnedProviders;
+        var list = (snap?.Providers ?? [])
             .Where(p => !(Settings.HideMissingProviders && p.Status == ProviderStatus.Error && p.ErrorCode == "CLI_NOT_FOUND" && !p.HasData))
-            .Select(p => Build(p, now)).ToList();
-        Updated?.Invoke();
+            .Where(p => !Settings.HiddenProviders.Contains(p.Id));
+        // scroll mode: the providers the user pinned come first (stable order otherwise)
+        if (Settings.LayoutMode == "scroll") list = list.OrderBy(p => pinned.Contains(p.Id) ? 0 : 1);
+        Providers = list.Select(p => Build(p, now)).ToList();
+        if (raise) Updated?.Invoke();
     }
 
     ProviderVM Build(ProviderUsage p, DateTimeOffset now)
@@ -96,7 +111,7 @@ public sealed class AppState : IDisposable
                 elapsed = Math.Clamp(1 - (r - now).TotalMinutes / d, 0, 1); has = true;
             }
             return new WindowVM(w.Id, Loc.WindowName(w.Id, w.Label), Loc.WindowName(w.Id, w.Label, true), Math.Min(pct, 100), Loc.Percent(pct),
-                Theme.Level(pct, accent), Loc.Countdown(w.ResetsAt, now), Loc.ResetAt(w.ResetsAt, now), elapsed, has);
+                Theme.Level(pct, accent), Loc.Countdown(w.ResetsAt, now), Loc.ResetAt(w.ResetsAt, now), elapsed, has, FitLevel >= 2 ? "mini" : Settings.ViewStyle, Settings.ShowResetLine && FitLevel < 2);
         }).ToList();
 
         string? notice = p.Status switch
@@ -110,7 +125,8 @@ public sealed class AppState : IDisposable
         return new ProviderVM(p.Id, p.Name, p.Plan, accent, notice, p.Status == ProviderStatus.Stale,
             p.FetchedAt is { } t ? Loc.T("Lido ", "Read ") + t.ToLocalTime().ToString("HH:mm") + " · " + Loc.Age(t, now) : "",
             windows, models, p.Details.Select(d => new Detail(d.Label == "credits" ? Loc.T("Créditos", "Credits") : d.Label == "extra_usage" ? Loc.T("Uso extra", "Extra usage") : d.Label, d.Value)).ToList(),
-            first is null ? [] : Service.History(p.Id, first.Id), IconCatalog.Resolve(p.Id, Settings.Icons), Settings.ShowIcons);
+            first is null ? [] : Service.History(p.Id, first.Id), IconCatalog.Resolve(p.Id, Settings.Icons), Settings.ShowIcons,
+            (FitLevel >= 2 ? "mini" : Settings.ViewStyle), Settings.ShowResetLine && FitLevel < 2, Settings.ShowModels && FitLevel == 0, Settings.ShowUpdated && FitLevel == 0, Settings.LayoutMode == "scroll" && Settings.PinnedProviders.Contains(p.Id));
     }
 
     public string StatusLine()

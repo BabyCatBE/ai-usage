@@ -26,7 +26,7 @@ public sealed class Settings
     public int IntervalMinutes { get; set; } = 5;
     public string Language { get; set; } = "auto";   // auto | pt | en
     public string Theme { get; set; } = "auto";      // colour mode: auto | light | dark
-    public string Style { get; set; } = "neu";       // look: neu (soft neumorphism) | glass (liquid glass)
+    public string Style { get; set; } = "neu";       // look: neu (soft neumorphism) | glass (liquid glass) | cyber (neon cyberpunk)
     public string RelayUrl { get; set; } = Defaults.Relay;
     public string WidgetEdge { get; set; } = "Right";   // Right | Left: docked to the middle of that screen edge
     public bool WidgetEnabled { get; set; } = true;
@@ -35,6 +35,22 @@ public sealed class Settings
     public bool StartWithWindows { get; set; } = true;
     public bool ShowIcons { get; set; } = true;
     public Dictionary<string, string> Icons { get; set; } = [];   // provider id -> icon id
+
+    // ---- window layout and visualization -------------------------------------------------------------------
+    public string LayoutMode { get; set; } = "fit";              // fit: everything always visible, scales with the window | scroll: pinned first, scroll for the rest
+    public List<string> HiddenProviders { get; set; } = [];      // provider ids the user does not want to see
+    public List<string> PinnedProviders { get; set; } = [];      // scroll mode: shown first and highlighted
+    public string ViewStyle { get; set; } = "bars";              // bars | segments | rings | numbers
+    public string Density { get; set; } = "comfortable";         // comfortable | compact
+    public bool ShowResetLine { get; set; } = true;
+    public bool ShowModels { get; set; } = true;
+    public bool ShowUpdated { get; set; } = true;
+    public bool ShowProviderBar { get; set; } = true;            // quick on/off chips under the header
+    public string CyberVariant { get; set; } = "neon-night";     // sub-theme of the cyberpunk look (several dark, several light)
+
+    // ---- performance (the app must stay invisible on a weak PC) --------------------------------------------
+    public bool PowerSaver { get; set; } = true;                 // no blur/shadow effects, lower frame rate, low priority
+    public bool PauseWhenIdle { get; set; } = true;              // skip automatic refreshes while you are away from the PC
 
     static string FilePath => Path.Combine(AppPaths.Data, "settings.json");
 

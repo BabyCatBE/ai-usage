@@ -25,6 +25,9 @@ public partial class MainWindow : Window
     public double CardWidth { get => (double)GetValue(CardWidthProperty); set => SetValue(CardWidthProperty, value); }
 
     readonly AppState state;
+    readonly System.Windows.Threading.DispatcherTimer resizeTimer = new() { Interval = TimeSpan.FromMilliseconds(110) };
+    bool dirty;                       // data changed while the window was hidden: refresh when it is shown
+    string? fitKey;                   // last layout inputs: identical inputs reuse the previous result
     Device? pairing;
     string mode = "dashboard";
     static readonly FontFamily Icons = new("Segoe Fluent Icons, Segoe MDL2 Assets");
@@ -37,6 +40,14 @@ public partial class MainWindow : Window
         {
             b.FontFamily = Icons; b.Content = g; b.FontSize = 15;
         }
+        LayoutButton.FontFamily = Icons; LayoutButton.FontSize = 15;
+        SourceInitialized += (_, _) => Theme.ApplyChrome(this);
+        IsVisibleChanged += (_, e) => { if (e.NewValue is true) Theme.ApplyChrome(this); };
+        Theme.Changed += () => Dispatcher.BeginInvoke(() => { Theme.ApplyChrome(this); UpdateLayoutButton(); fitKey = null; resizeTimer.Stop(); resizeTimer.Start(); });
+        // while the window is being dragged the Viewbox rescales for free; the (costly) re-layout runs once, when the user stops
+        resizeTimer.Tick += (_, _) => { resizeTimer.Stop(); UpdateColumns(); };
+        DashboardPanel.SizeChanged += (_, _) => { resizeTimer.Stop(); resizeTimer.Start(); };
+        IsVisibleChanged += (_, e) => { if (e.NewValue is true && dirty) { dirty = false; state.Rebuild(); } };
         state.Updated += OnUpdated;
         state.Devices.Changed += () => Dispatcher.BeginInvoke(RefreshDevices);
         SizeChanged += (_, _) => UpdateColumns();
@@ -47,25 +58,204 @@ public partial class MainWindow : Window
         UpdateColumns();
     }
 
-    void UpdateColumns()
+    /// <summary>Header buttons and title shrink with the window so nothing gets cut off.</summary>
+    void UpdateHeader()
     {
-        var avail = Math.Max(240, ActualWidth - 12 - 18 - 16);
-        var cols = Math.Clamp((int)(avail / 360), 1, 3);
-        CardWidth = Math.Floor(avail / cols);
-        var compact = ActualWidth < 420;
-        foreach (var b in new[] { RefreshButton, PinButton, PhoneButton, SettingsButton }) { b.Width = b.Height = compact ? 34 : 40; b.Margin = new Thickness(compact ? 1 : 3); }
-        TitleText.FontSize = compact ? 18 : 22;
+        var w = ActualWidth;
+        var size = w < 340 ? 30 : w < 420 ? 34 : 40;
+        foreach (var b in new[] { LayoutButton, RefreshButton, PinButton, PhoneButton, SettingsButton })
+        {
+            b.Width = b.Height = size; b.Margin = new Thickness(size < 40 ? 1 : 3); b.FontSize = size < 34 ? 13 : 15;
+        }
+        TitleText.FontSize = w < 340 ? 15 : w < 420 ? 18 : 22;
+        Header.Margin = w < 340 ? new Thickness(12, 10, 8, 4) : new Thickness(20, 16, 14, 6);
+        ProviderBar.Margin = w < 340 ? new Thickness(8, 0, 6, 2) : new Thickness(16, 0, 12, 4);
+        UpdateBarVisibility();
     }
 
+    void UpdateBarVisibility() =>
+        ProviderBar.Visibility = state.Settings.ShowProviderBar && mode == "dashboard" && ActualHeight >= 400 ? Visibility.Visible : Visibility.Collapsed;
+
+    const double MinCardWidth = 230;
+    /// <summary>Content is never scaled below this: below it the layout gets denser or starts to scroll, so numbers stay readable.</summary>
+    const double GoodScale = 0.92, MinScale = 0.8;
+
+    double MeasureCards(int cols, double cardW)
+    {
+        CardWidth = cardW; Cards.Width = cols * cardW;
+        Cards.InvalidateMeasure();
+        Cards.Measure(new Size(Cards.Width, double.PositiveInfinity));
+        return Cards.DesiredSize.Height;
+    }
+
+    /// <summary>Best column count for the current content: tries one to three columns and returns the largest scale that fits the height.</summary>
+    (int cols, double scale, double width) SearchColumns(double availW, double availH, int count)
+    {
+        var best = (cols: 1, scale: -1.0, width: availW);
+        for (var c = 1; c <= Math.Min(3, count); c++)
+        {
+            double scale = 1, width = availW; var ok = true;
+            for (var it = 0; it < 3; it++)
+            {
+                width = availW / Math.Max(0.25, scale);
+                var cw = Math.Floor(width / c);
+                if (c > 1 && cw < MinCardWidth) { ok = false; break; }
+                scale = Math.Min(1, availH / Math.Max(1, MeasureCards(c, cw)));
+            }
+            if (ok && scale > best.scale + 0.015) best = (c, scale, width);
+            if (ok && scale >= 0.999) break;   // fits at natural size with this many columns: no need to look further
+        }
+        return best;
+    }
+
+    /// <summary>Switches the card detail level (0 full, 1 no secondary lines, 2 one line per window) and rebuilds the cards if it changed.</summary>
+    void SetFitLevel(int level)
+    {
+        Theme.SetDensity(level);
+        if (state.FitLevel == level) return;
+        state.FitLevel = level;
+        state.Rebuild(false);
+        Cards.ItemsSource = null;
+        Cards.ItemsSource = state.Providers;
+        Cards.UpdateLayout();   // generate containers + templates now, or the next measure sees the previous level
+    }
+
+    /// <summary>
+    /// "fit" layout: every provider stays visible AND readable. It tries the full card first, then denser ones (no secondary lines, then one
+    /// line per window), choosing columns that make the content scale as little as possible. If even the densest layout would need to be
+    /// scaled below a readable size, the window scrolls instead of shrinking the numbers.
+    /// "scroll" layout: normal size, columns by width, vertical scrolling.
+    /// </summary>
+    bool fitBusy, fitAgain;
+    void UpdateColumns()
+    {
+        if (fitBusy) { fitAgain = true; return; }
+        fitBusy = true;
+        try { FitLayout(); }
+        finally { fitBusy = false; }
+        if (fitAgain) { fitAgain = false; Dispatcher.BeginInvoke(UpdateColumns, System.Windows.Threading.DispatcherPriority.Loaded); }
+    }
+
+    void FitLayout()
+    {
+        UpdateHeader();
+        if (DashboardPanel.ActualWidth < 50 || DashboardPanel.ActualHeight < 30) return;
+        var fit = state.Settings.LayoutMode != "scroll";
+        var count = Math.Max(1, state.Providers.Count);
+        var availW = DashboardPanel.ActualWidth - 12 - 8;
+        var availH = DashboardPanel.ActualHeight - 4;
+        var key = $"{availW:0}|{availH:0}|{fit}|{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(state.Providers)}|{state.Settings.ViewStyle}|{state.Settings.Density}";
+        if (key == fitKey) return;
+        fitKey = key;
+
+        int cols; double cardW; var scales = false;
+        if (fit)
+        {
+            availW = DashboardPanel.ActualWidth - 12;
+            var pick = (level: 0, cols: 1, scale: -1.0, width: availW);
+            for (var level = 0; level <= 2; level++)
+            {
+                SetFitLevel(level);
+                var r = SearchColumns(availW, availH, count);
+                if (r.scale > pick.scale + 0.001) pick = (level, r.cols, r.scale, r.width);
+                if (r.scale >= GoodScale) { pick = (level, r.cols, r.scale, r.width); break; }
+            }
+            if (pick.scale >= MinScale)
+            {
+                SetFitLevel(pick.level);
+                cols = pick.cols; cardW = Math.Floor(pick.width / cols); scales = true;
+            }
+            else
+            {
+                // would be unreadable: densest layout at natural size, scrolling
+                SetFitLevel(2);
+                availW = DashboardPanel.ActualWidth - 12 - 8;
+                cols = Math.Clamp((int)(availW / 300), 1, 3);
+                cardW = Math.Floor(availW / cols);
+            }
+        }
+        else
+        {
+            SetFitLevel(0);
+            cols = Math.Clamp((int)(availW / 360), 1, 3);
+            cardW = Math.Floor(availW / cols);
+        }
+
+        FitBox.Stretch = scales ? Stretch.Uniform : Stretch.None;
+        FitBox.HorizontalAlignment = scales ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        DashboardPanel.VerticalScrollBarVisibility = scales ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
+        CardWidth = cardW; Cards.Width = cols * cardW;
+        EmptyText.Width = Math.Max(120, Cards.Width - 48);
+    }
+    // ---- provider chips + layout mode -------------------------------------------------------------------------
+
+    void BuildProviderBar()
+    {
+        var st = state.Settings;
+        ProviderBar.Children.Clear();
+        UpdateBarVisibility();
+        foreach (var (pid, pname) in IconCatalog.Providers)
+        {
+            var on = !st.HiddenProviders.Contains(pid);
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            if (st.ShowIcons) content.Children.Add(new ProviderIcon { IconId = IconCatalog.Resolve(pid, st.Icons), Accent = on ? Theme.Accent(pid) : Theme.Dim, Width = 15, Height = 15, Margin = new Thickness(0, 0, 6, 0) });
+            content.Children.Add(new TextBlock { Text = pname, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)FindResource(on ? "TextBrush" : "DimBrush") });
+            var b = new Button
+            {
+                Content = content, Style = (Style)FindResource("NeuButton"), Padding = new Thickness(9, 4, 11, 4), Margin = new Thickness(3, 2, 3, 2), Opacity = on ? 1 : 0.55,
+                ToolTip = on ? Loc.T("Ocultar ", "Hide ") + pname : Loc.T("Mostrar ", "Show ") + pname,
+            };
+            var id = pid;
+            b.Click += (_, _) =>
+            {
+                if (!st.HiddenProviders.Remove(id)) st.HiddenProviders.Add(id);
+                st.Save(); state.Rebuild();
+            };
+            ProviderBar.Children.Add(b);
+        }
+    }
+
+    void UpdateLayoutButton()
+    {
+        var fit = state.Settings.LayoutMode != "scroll";
+        LayoutButton.Content = fit ? "\uE80A" : "\uE8FD";
+        LayoutButton.ToolTip = fit
+            ? Loc.T("Ver todos: ajusta ao tamanho da janela. Clique para destaques com rolagem", "See all: fits the window. Click for highlights with scrolling")
+            : Loc.T("Destaques com rolagem. Clique para ver todos ajustados à janela", "Highlights with scrolling. Click to fit everything in the window");
+    }
+
+    void OnLayoutMode(object s, RoutedEventArgs e)
+    {
+        state.Settings.LayoutMode = state.Settings.LayoutMode == "scroll" ? "fit" : "scroll";
+        ApplyView();
+    }
+
+    /// <summary>View-only settings: no service restart, just repaint with the new look and layout.</summary>
+    void ApplyView()
+    {
+        state.Settings.Save();
+        Theme.Apply(state.Settings);
+        ((App)Application.Current).ApplyPerformance();
+        fitKey = null;
+        state.Rebuild();
+        BuildSettings();
+        UpdateLayoutButton();
+    }
     void OnUpdated()
     {
         Dispatcher.BeginInvoke(() =>
         {
+            if (!IsVisible) { dirty = true; return; }   // nothing is drawn for a hidden window
             Cards.ItemsSource = null;
             Cards.ItemsSource = state.Providers;
             StatusText.Text = state.StatusLine();
             EmptyText.Visibility = state.Providers.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            EmptyText.Text = Loc.T("Nenhum provedor com dados ainda. Faça login nos CLIs (codex, claude, opencode) e toque em atualizar.", "No provider data yet. Sign in to the CLIs (codex, claude, opencode) and refresh.");
+            EmptyText.Text = state.Settings.HiddenProviders.Count > 0 && state.Service.Current is { Providers.Count: > 0 }
+                ? Loc.T("Todos os provedores estão ocultos. Use os botões acima para mostrar.", "All providers are hidden. Use the buttons above to show them.")
+                : Loc.T("Nenhum provedor com dados ainda. Faça login nos CLIs (codex, claude, opencode) e toque em atualizar.", "No provider data yet. Sign in to the CLIs (codex, claude, opencode) and refresh.");
+            BuildProviderBar();
+            UpdateLayoutButton();
+            Dispatcher.BeginInvoke(UpdateColumns, System.Windows.Threading.DispatcherPriority.Loaded);
             RefreshButton.IsEnabled = !state.Refreshing;
             RefreshButton.Opacity = state.Refreshing ? 0.5 : 1;
         });
@@ -90,6 +280,7 @@ public partial class MainWindow : Window
         NoDevices.Text = Loc.T("Nenhum celular pareado.", "No paired phones.");
         RefreshDevices();
         BuildSettings();
+        UpdateLayoutButton();
     }
 
     // ---- navigation ----------------------------------------------------------------------------------------
@@ -100,15 +291,16 @@ public partial class MainWindow : Window
         DashboardPanel.Visibility = mode == "dashboard" ? Visibility.Visible : Visibility.Collapsed;
         PhonePanel.Visibility = mode == "phone" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPanel.Visibility = mode == "settings" ? Visibility.Visible : Visibility.Collapsed;
-        PhoneButton.Foreground = mode == "phone" ? new SolidColorBrush(Theme.Accent("codex")) : (Brush)FindResource("TextBrush");
-        SettingsButton.Foreground = mode == "settings" ? new SolidColorBrush(Theme.Accent("codex")) : (Brush)FindResource("TextBrush");
+        ProviderBar.Visibility = state.Settings.ShowProviderBar && mode == "dashboard" ? Visibility.Visible : Visibility.Collapsed;
+        PhoneButton.Foreground = mode == "phone" ? new SolidColorBrush(Theme.Highlight) : (Brush)FindResource("TextBrush");
+        SettingsButton.Foreground = mode == "settings" ? new SolidColorBrush(Theme.Highlight) : (Brush)FindResource("TextBrush");
     }
 
     void OnRefresh(object s, RoutedEventArgs e) { _ = state.Service.RefreshAsync(); OnUpdated(); }
     void OnPin(object s, RoutedEventArgs e)
     {
         Topmost = !Topmost;
-        PinButton.Foreground = Topmost ? new SolidColorBrush(Theme.Accent("codex")) : (Brush)FindResource("TextBrush");
+        PinButton.Foreground = Topmost ? new SolidColorBrush(Theme.Highlight) : (Brush)FindResource("TextBrush");
     }
     void OnPhone(object s, RoutedEventArgs e) => Show("phone");
     void OnSettings(object s, RoutedEventArgs e) => Show("settings");
@@ -152,7 +344,7 @@ public partial class MainWindow : Window
             var rename = new Button { Content = Loc.T("Renomear", "Rename"), Style = (Style)FindResource("NeuButton"), Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(10, 5, 10, 5), FontSize = 12 };
             DockPanel.SetDock(rename, Dock.Right);
             row.Children.Add(rename);
-            var dot = new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Fill = online ? new SolidColorBrush(Theme.Accent("codex")) : (Brush)FindResource("DimBrush") };
+            var dot = new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Fill = online ? new SolidColorBrush(Theme.Highlight) : (Brush)FindResource("DimBrush") };
             DockPanel.SetDock(dot, Dock.Left);
             row.Children.Add(dot);
             var text = new StackPanel();
@@ -199,7 +391,7 @@ public partial class MainWindow : Window
             {
                 var v = values[i];
                 var b = new Button { Content = labels[i], Style = (Style)FindResource("NeuButton"), Padding = new Thickness(12, 6, 12, 6), Margin = new Thickness(0, 4, 6, 4), FontSize = 12 };
-                if (v == current) b.Foreground = new SolidColorBrush(Theme.Accent("codex"));
+                if (v == current) b.Foreground = new SolidColorBrush(Theme.Highlight);
                 b.Click += (_, _) => { set(v); Apply(); BuildSettings(); };
                 panel.Children.Add(b);
             }
@@ -212,9 +404,86 @@ public partial class MainWindow : Window
         Caption(Loc.T("Idioma", "Language"));
         Choice(["auto", "pt", "en"], [Loc.T("Automático", "Automatic"), "Português", "English"], st.Language, v => st.Language = v);
         Caption(Loc.T("Tema", "Theme"));
-        Choice(["neu", "glass"], ["Neumorphism", "Liquid glass"], st.Style, v => st.Style = v);
-        Caption(Loc.T("Modo", "Mode"));
-        Choice(["auto", "light", "dark"], [Loc.T("Automático", "Automatic"), Loc.T("Claro", "Light"), Loc.T("Escuro", "Dark")], st.Theme, v => st.Theme = v);
+        Choice(["neu", "glass", "cyber"], ["Neumorphism", "Liquid glass", "Cyberpunk"], st.Style, v => st.Style = v);
+        if (st.Style != "cyber") Caption(Loc.T("Modo", "Mode"));
+        if (st.Style != "cyber") Choice(["auto", "light", "dark"], [Loc.T("Automático", "Automatic"), Loc.T("Claro", "Light"), Loc.T("Escuro", "Dark")], st.Theme, v => st.Theme = v);
+
+        // ---- visualization: layout, providers, indicators ----
+        void ViewChoice(string[] values, string[] labels, string current, Action<string> set)
+        {
+            var panel = new WrapPanel();
+            for (var i = 0; i < values.Length; i++)
+            {
+                var v = values[i];
+                var b = new Button { Content = labels[i], Style = (Style)FindResource("NeuButton"), Padding = new Thickness(12, 6, 12, 6), Margin = new Thickness(0, 4, 6, 4), FontSize = 12 };
+                if (v == current) b.Foreground = new SolidColorBrush(Theme.Highlight);
+                b.Click += (_, _) => { set(v); ApplyView(); };
+                panel.Children.Add(b);
+            }
+            SettingsBody.Children.Add(panel);
+        }
+        void ViewCheck(string text, bool value, Action<bool> set)
+        {
+            var c = new CheckBox { Content = text, IsChecked = value, Style = (Style)FindResource("NeuCheck") };
+            c.Click += (_, _) => { set(c.IsChecked == true); ApplyView(); };
+            SettingsBody.Children.Add(c);
+        }
+        if (st.Style == "cyber")
+        {
+            Caption(Loc.T("Cyberpunk: escolha o submodo", "Cyberpunk: pick a sub-theme"));
+            foreach (var dark in new[] { true, false })
+            {
+                SettingsBody.Children.Add(new TextBlock { Text = dark ? Loc.T("Escuros", "Dark") : Loc.T("Claros", "Light"), Style = (Style)FindResource("Dim"), FontSize = 11, Margin = new Thickness(0, 4, 0, 0) });
+                var wrap = new WrapPanel();
+                foreach (var v in CyberVariant.All.Where(x => x.Dark == dark))
+                {
+                    var sel = v.Id == st.CyberVariant;
+                    var content = new StackPanel { Orientation = Orientation.Horizontal };
+                    var dot = new Grid { Width = 16, Height = 16, Margin = new Thickness(0, 0, 7, 0) };
+                    dot.Children.Add(new System.Windows.Shapes.Ellipse { Fill = new LinearGradientBrush(v.Primary, v.Secondary, 45), Stroke = new SolidColorBrush(v.Dark ? Colors.White : Colors.Black) { Opacity = 0.35 }, StrokeThickness = 1 });
+                    content.Children.Add(dot);
+                    content.Children.Add(new TextBlock { Text = v.Name, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Foreground = sel ? new SolidColorBrush(Theme.Highlight) : (Brush)FindResource("TextBrush") });
+                    var b = new Button { Content = content, Style = (Style)FindResource("NeuButton"), Padding = new Thickness(10, 6, 12, 6), Margin = new Thickness(0, 4, 6, 4) };
+                    var vid = v.Id;
+                    b.Click += (_, _) => { st.CyberVariant = vid; ApplyView(); };
+                    wrap.Children.Add(b);
+                }
+                SettingsBody.Children.Add(wrap);
+            }
+        }
+        Caption(Loc.T("Layout da janela", "Window layout"));
+        ViewChoice(["fit", "scroll"], [Loc.T("Ver todos (ajusta ao tamanho)", "See all (fits the window)"), Loc.T("Destaques + rolagem", "Highlights + scrolling")], st.LayoutMode, v => st.LayoutMode = v);
+        SettingsBody.Children.Add(new TextBlock
+        {
+            Style = (Style)FindResource("Dim"), TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.None, FontSize = 11, Margin = new Thickness(0, 0, 0, 2),
+            Text = st.LayoutMode == "scroll"
+                ? Loc.T("Os provedores em destaque aparecem primeiro; role para ver o restante.", "Highlighted providers come first; scroll to see the rest.")
+                : Loc.T("Tudo continua visível: ao redimensionar a janela, o conteúdo se reorganiza e reduz para caber.", "Everything stays visible: when you resize the window the content reflows and scales to fit."),
+        });
+        Caption(Loc.T("Provedores exibidos", "Providers shown"));
+        foreach (var (pid, pname) in IconCatalog.Providers)
+        {
+            var id = pid;
+            ViewCheck(pname, !st.HiddenProviders.Contains(id), on => { if (on) st.HiddenProviders.Remove(id); else if (!st.HiddenProviders.Contains(id)) st.HiddenProviders.Add(id); });
+        }
+        ViewCheck(Loc.T("Botões de atalho para mostrar/ocultar na janela", "Quick show/hide buttons in the window"), st.ShowProviderBar, v => st.ShowProviderBar = v);
+        if (st.LayoutMode == "scroll")
+        {
+            Caption(Loc.T("Em destaque (aparecem primeiro)", "Highlighted (shown first)"));
+            foreach (var (pid, pname) in IconCatalog.Providers)
+            {
+                var id = pid;
+                ViewCheck("★ " + pname, st.PinnedProviders.Contains(id), on => { if (on) { if (!st.PinnedProviders.Contains(id)) st.PinnedProviders.Add(id); } else st.PinnedProviders.Remove(id); });
+            }
+        }
+        Caption(Loc.T("Indicadores", "Indicators"));
+        ViewChoice(["bars", "segments", "rings", "numbers"], [Loc.T("Barras", "Bars"), Loc.T("Segmentos", "Segments"), Loc.T("Anéis", "Rings"), Loc.T("Números", "Numbers")], st.ViewStyle, v => st.ViewStyle = v);
+        Caption(Loc.T("Densidade", "Density"));
+        ViewChoice(["comfortable", "compact"], [Loc.T("Confortável", "Comfortable"), Loc.T("Compacta", "Compact")], st.Density, v => st.Density = v);
+        Caption(Loc.T("Mostrar nos cartões", "Show on cards"));
+        ViewCheck(Loc.T("Quando reseta", "Reset time"), st.ShowResetLine, v => st.ShowResetLine = v);
+        ViewCheck(Loc.T("Uso por modelo / produto", "Per model / product usage"), st.ShowModels, v => st.ShowModels = v);
+        ViewCheck(Loc.T("Hora da última leitura", "Last reading time"), st.ShowUpdated, v => st.ShowUpdated = v);
         Caption(Loc.T("Ícones dos provedores", "Provider icons"));
         void IconCheck()
         {
@@ -246,6 +515,9 @@ public partial class MainWindow : Window
         Check(Loc.T("Mostrar o widget no canto da tela", "Show the widget on a screen corner"), st.WidgetEnabled, v => st.WidgetEnabled = v);
         Choice(["Right", "Left"], [Loc.T("Borda direita", "Right edge"), Loc.T("Borda esquerda", "Left edge")], st.WidgetEdge, v => st.WidgetEdge = v);
         Check(Loc.T("Sempre sobre outras janelas", "Always on top"), st.WidgetAlwaysOnTop, v => st.WidgetAlwaysOnTop = v);
+        Caption(Loc.T("Desempenho", "Performance"));
+        ViewCheck(Loc.T("Modo economia: sem sombras/efeitos pesados, prioridade baixa", "Power saver: no heavy shadows/effects, low priority"), st.PowerSaver, v => st.PowerSaver = v);
+        ViewCheck(Loc.T("Pausar atualização automática quando eu estiver ausente (10 min)", "Pause automatic refresh while I am away (10 min)"), st.PauseWhenIdle, v => st.PauseWhenIdle = v);
         Caption(Loc.T("Geral", "General"));
         Check(Loc.T("Ocultar provedores não instalados", "Hide providers that are not installed"), st.HideMissingProviders, v => st.HideMissingProviders = v);
         Check(Loc.T("Iniciar com o Windows", "Start with Windows"), st.StartWithWindows, v => st.StartWithWindows = v);

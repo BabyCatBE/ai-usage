@@ -2,56 +2,134 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Usage.Windows"
-        Title="AI Usage" Width="440" Height="720" MinWidth="300" MinHeight="260"
+        Title="AI Usage" Width="440" Height="720" MinWidth="240" MinHeight="180"
         Background="{DynamicResource WindowBrush}" UseLayoutRounding="True" TextOptions.TextFormattingMode="Ideal">
     <Window.Resources>
+        <!-- One quota window, drawn as bar / segments (BarView), ring (RingView) or big number (NumView). -->
         <DataTemplate x:Key="WindowRow" DataType="{x:Type local:WindowVM}">
-            <StackPanel Margin="0,8,0,0">
-                <DockPanel LastChildFill="False">
-                    <TextBlock DockPanel.Dock="Right" Text="{Binding PercentText}" FontSize="19" FontWeight="Bold" Style="{StaticResource Label}"
-                               Foreground="{Binding AccentBrush}"/>
-                    <TextBlock Text="{Binding Label}" FontSize="13" FontWeight="SemiBold" Style="{StaticResource Label}" VerticalAlignment="Bottom"/>
-                </DockPanel>
-                <local:NeuBar Value="{Binding Percent}" Accent="{Binding Accent}" Margin="0,5,0,4" Height="10"/>
-                <TextBlock Text="{Binding ResetLine}" Style="{StaticResource Dim}" FontSize="11.5"/>
-            </StackPanel>
+            <Grid Margin="{DynamicResource RowGap}">
+                <StackPanel x:Name="BarView">
+                    <DockPanel LastChildFill="False">
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding PercentText}" FontSize="19" FontWeight="Bold" Style="{StaticResource Label}"
+                                   Foreground="{Binding AccentBrush}"/>
+                        <TextBlock Text="{Binding Label}" FontSize="13" FontWeight="SemiBold" Style="{StaticResource Label}" VerticalAlignment="Bottom"/>
+                    </DockPanel>
+                    <local:NeuBar Value="{Binding Percent}" Accent="{Binding Accent}" Kind="{Binding BarKind}" Margin="0,5,0,4" Height="10"/>
+                    <TextBlock Text="{Binding ResetLine}" Style="{StaticResource Dim}" FontSize="11.5"
+                               Visibility="{Binding ShowReset, Converter={x:Static local:Conv.BoolToVisible}}"/>
+                </StackPanel>
+
+                <!-- tightest layout: label, bar and percentage on a single line -->
+                <Grid x:Name="MiniView" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" MinWidth="34"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto" MinWidth="46"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding ShortLabel}" FontSize="12.5" FontWeight="SemiBold" Style="{StaticResource Label}" VerticalAlignment="Center"/>
+                    <local:NeuBar Grid.Column="1" Value="{Binding Percent}" Accent="{Binding Accent}" Height="9" Margin="6,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" Text="{Binding PercentText}" FontSize="16" FontWeight="Bold" Style="{StaticResource Label}" Foreground="{Binding AccentBrush}"
+                               TextAlignment="Right" VerticalAlignment="Center"/>
+                </Grid>
+
+                <StackPanel x:Name="RingView" Visibility="Collapsed" HorizontalAlignment="Center" Margin="4,0">
+                    <Viewbox MaxWidth="78" MaxHeight="78" StretchDirection="DownOnly" HorizontalAlignment="Center">
+                        <Grid Width="78" Height="78">
+                            <local:Ring Value="{Binding Percent}" Accent="{Binding Accent}"/>
+                            <TextBlock Text="{Binding PercentText}" FontSize="16" FontWeight="Bold" Style="{StaticResource Label}" Foreground="{Binding AccentBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Viewbox>
+                    <TextBlock Text="{Binding Label}" FontSize="12.5" FontWeight="SemiBold" Style="{StaticResource Label}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                    <TextBlock Text="{Binding Countdown}" Style="{StaticResource Dim}" FontSize="10.5" HorizontalAlignment="Center" TextAlignment="Center"
+                               Visibility="{Binding ShowReset, Converter={x:Static local:Conv.BoolToVisible}}"/>
+                </StackPanel>
+
+                <StackPanel x:Name="NumView" Visibility="Collapsed" Margin="4,0">
+                    <TextBlock Text="{Binding Label}" Style="{StaticResource Dim}" FontSize="12" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding PercentText}" FontSize="34" FontWeight="Bold" Style="{StaticResource Label}" Foreground="{Binding AccentBrush}"/>
+                    <local:NeuBar Value="{Binding Percent}" Accent="{Binding Accent}" Height="4" Margin="0,2,0,4"/>
+                    <TextBlock Text="{Binding ResetLine}" Style="{StaticResource Dim}" FontSize="10.5" TextWrapping="Wrap" TextTrimming="None"
+                               Visibility="{Binding ShowReset, Converter={x:Static local:Conv.BoolToVisible}}"/>
+                </StackPanel>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding ViewStyle}" Value="rings">
+                    <Setter TargetName="BarView" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="RingView" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ViewStyle}" Value="mini">
+                    <Setter TargetName="BarView" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="MiniView" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ViewStyle}" Value="numbers">
+                    <Setter TargetName="BarView" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="NumView" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
+
+        <!-- Rings and numbers sit side by side; bars and segments stack. -->
+        <Style x:Key="WindowList" TargetType="ItemsControl">
+            <Setter Property="Focusable" Value="False"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Horizontal}" Value="True">
+                    <Setter Property="ItemsPanel">
+                        <Setter.Value>
+                            <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
 
         <DataTemplate x:Key="ProviderCard" DataType="{x:Type local:ProviderVM}">
             <ContentControl Style="{StaticResource Card}">
                 <StackPanel>
                     <DockPanel LastChildFill="True" Margin="0,0,0,2">
-                        <Grid DockPanel.Dock="Left" Width="30" Height="30" Margin="0,0,10,0" Visibility="{Binding ShowIcon, Converter={x:Static local:Conv.BoolToVisible}}">
+                        <Grid x:Name="IconBox" DockPanel.Dock="Left" Width="30" Height="30" Margin="0,0,10,0" Visibility="{Binding ShowIcon, Converter={x:Static local:Conv.BoolToVisible}}">
                             <Ellipse Fill="{DynamicResource ShadeBrush}" Opacity="0.35"/>
                             <local:ProviderIcon IconId="{Binding IconId}" Accent="{Binding Accent}" Width="19" Height="19" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
-                        
+
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Name}" FontSize="17" FontWeight="Bold" Style="{StaticResource Label}"/>
+                            <TextBlock x:Name="NameText" Text="{Binding Name}" FontSize="17" FontWeight="Bold" Style="{StaticResource Label}"/>
                             <Border Margin="8,2,0,0" Padding="8,1" CornerRadius="9" Background="{DynamicResource ShadeBrush}" VerticalAlignment="Center"
                                     Visibility="{Binding HasPlan, Converter={x:Static local:Conv.BoolToVisible}}">
                                 <TextBlock Text="{Binding Plan}" FontSize="10.5" Style="{StaticResource Dim}" FontWeight="SemiBold"/>
                             </Border>
+                            <TextBlock Text="★" Margin="8,0,0,0" FontSize="13" Foreground="{Binding AccentBrush}" VerticalAlignment="Center"
+                                       Visibility="{Binding Pinned, Converter={x:Static local:Conv.BoolToVisible}}"/>
                         </StackPanel>
                     </DockPanel>
                     <TextBlock Text="{Binding Notice}" Style="{StaticResource Dim}" Foreground="{DynamicResource WarnBrush}" FontSize="12" TextWrapping="Wrap" TextTrimming="None" Margin="40,2,0,4"
                                Visibility="{Binding HasNotice, Converter={x:Static local:Conv.BoolToVisible}}"/>
-                    <ItemsControl ItemsSource="{Binding Windows}" ItemTemplate="{StaticResource WindowRow}" Focusable="False"/>
+                    <ItemsControl ItemsSource="{Binding Windows}" ItemTemplate="{StaticResource WindowRow}" Style="{StaticResource WindowList}"/>
                     <TextBlock Text="{Binding ModelsText}" Style="{StaticResource Dim}" FontSize="11.5" TextWrapping="Wrap" TextTrimming="None" Margin="0,10,0,0"
                                Visibility="{Binding HasModels, Converter={x:Static local:Conv.BoolToVisible}}"/>
-                    <TextBlock Text="{Binding UpdatedText}" Style="{StaticResource Dim}" FontSize="10.5" Opacity="0.8" Margin="0,8,0,0"/>
+                    <TextBlock Text="{Binding UpdatedText}" Style="{StaticResource Dim}" FontSize="10.5" Opacity="0.8" Margin="0,8,0,0"
+                               Visibility="{Binding ShowUpdated, Converter={x:Static local:Conv.BoolToVisible}}"/>
                 </StackPanel>
             </ContentControl>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Tight}" Value="True">
+                    <Setter TargetName="IconBox" Property="Width" Value="22"/>
+                    <Setter TargetName="IconBox" Property="Height" Value="22"/>
+                    <Setter TargetName="IconBox" Property="Margin" Value="0,0,8,0"/>
+                    <Setter TargetName="NameText" Property="FontSize" Value="14.5"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="20,16,14,6">
+        <Grid Grid.Row="0" Margin="20,16,14,6" x:Name="Header">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -61,6 +139,7 @@
                 <TextBlock x:Name="StatusText" Style="{StaticResource Dim}" Margin="0,2,0,0"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button x:Name="LayoutButton" Style="{StaticResource NeuRound}" Click="OnLayoutMode" Margin="3"/>
                 <Button x:Name="RefreshButton" Style="{StaticResource NeuRound}" Click="OnRefresh" Margin="3" Content="↻"/>
                 <Button x:Name="PinButton" Style="{StaticResource NeuRound}" Click="OnPin" Margin="3" Content="📌"/>
                 <Button x:Name="PhoneButton" Style="{StaticResource NeuRound}" Click="OnPhone" Margin="3" Content="📱"/>
@@ -68,16 +147,21 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1">
-            <ScrollViewer x:Name="DashboardPanel" VerticalScrollBarVisibility="Auto" Focusable="False">
-                <StackPanel>
-                    <ItemsControl x:Name="Cards" ItemTemplate="{StaticResource ProviderCard}" Margin="6,0,6,0" Focusable="False">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><WrapPanel ItemWidth="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=Window}}"/></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                    <TextBlock x:Name="EmptyText" Style="{StaticResource Dim}" TextWrapping="Wrap" Margin="24,12" Visibility="Collapsed"/>
-                </StackPanel>
+        <!-- quick on/off for each provider -->
+        <WrapPanel x:Name="ProviderBar" Grid.Row="1" Margin="16,0,12,4"/>
+
+        <Grid Grid.Row="2">
+            <ScrollViewer x:Name="DashboardPanel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                <Viewbox x:Name="FitBox" Stretch="None" StretchDirection="DownOnly" VerticalAlignment="Top" HorizontalAlignment="Left">
+                    <StackPanel x:Name="CardsHost">
+                        <ItemsControl x:Name="Cards" ItemTemplate="{StaticResource ProviderCard}" Margin="6,0,6,0" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel ItemWidth="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=Window}}"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                        <TextBlock x:Name="EmptyText" Style="{StaticResource Dim}" TextWrapping="Wrap" Margin="24,12" Visibility="Collapsed"/>
+                    </StackPanel>
+                </Viewbox>
             </ScrollViewer>
 
             <ScrollViewer x:Name="PhonePanel" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" Focusable="False">

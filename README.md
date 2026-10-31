@@ -4,7 +4,9 @@
 
 **Português:** [role para a seção em português](#português)
 
-- Two looks, **soft neumorphism** and **liquid glass**, each with light, dark or automatic mode (Windows and Android).
+- Three looks: **soft neumorphism**, **liquid glass** (Apple-style rim and sheen, opaque fallback when Windows transparency is off) and **cyberpunk** with 9 sub-themes (5 dark, 4 light). Light, dark or automatic mode (Windows and Android).
+- **Windows layout modes**: *see all* (reflows to 1-3 columns and switches to denser cards as the window shrinks, never below a readable size, then scrolls) or *highlights + scrolling* (starred providers first). Show or hide each provider, and pick the indicator style: bars, segments, rings or numbers.
+- **Light on a weak PC**: power-saver mode (no blur effects, low priority, Windows efficiency mode while hidden, 30 fps), automatic refresh pauses while you are away, nothing is redrawn while the window is hidden (about 0.01% CPU in the tray).
 - **Windows floating widget** docked to the middle of the right (or left) screen edge as a thin retracted tab, so it never covers window buttons: hover to expand every window of every provider, hover a provider for a detailed report (all windows, elapsed time, models, 24 h history).
 - **Provider icons** (ChatGPT/Codex, Claude/Claude Code mascot, OpenCode or a Go-plan model letter) with an on/off switch, on the widgets and in both apps.
 - **Windows app** that reflows from one to three columns, made to live in a split-screen on a second monitor.

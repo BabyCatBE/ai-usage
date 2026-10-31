@@ -2,6 +2,8 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using Microsoft.Win32;
 using Usage.Core;
 
@@ -60,64 +62,217 @@ public static class Loc
     public static string Percent(double? v) => v is null ? "—" : v % 1 == 0 ? $"{v:0}%" : $"{v:0.0}%";
 }
 
-/// <summary>Soft neumorphism palette. Applied to application resources so every DynamicResource follows it.</summary>
+/// <summary>Keeps the app invisible on a weak PC: process priority, Windows efficiency mode (EcoQoS) and user-idle detection.</summary>
+public static class Power
+{
+    [StructLayout(LayoutKind.Sequential)] struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+    [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+    [StructLayout(LayoutKind.Sequential)] struct PROCESS_POWER_THROTTLING_STATE { public uint Version, ControlMask, StateMask; }
+    [DllImport("kernel32.dll")] static extern bool SetProcessInformation(IntPtr process, int cls, ref PROCESS_POWER_THROTTLING_STATE info, int size);
+    const int ProcessPowerThrottling = 4; const uint ExecutionSpeed = 1;
+
+    /// <summary>Seconds since the last keyboard or mouse input.</summary>
+    public static double IdleSeconds()
+    {
+        var i = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+        if (!GetLastInputInfo(ref i)) return 0;
+        return unchecked((uint)Environment.TickCount - i.dwTime) / 1000.0;
+    }
+
+    /// <summary>saver on: below-normal priority; eco = also ask Windows to run the process on efficient cores / low clocks.</summary>
+    public static void Apply(bool saver, bool eco)
+    {
+        try
+        {
+            using var p = System.Diagnostics.Process.GetCurrentProcess();
+            p.PriorityClass = saver ? System.Diagnostics.ProcessPriorityClass.BelowNormal : System.Diagnostics.ProcessPriorityClass.Normal;
+            var st = new PROCESS_POWER_THROTTLING_STATE { Version = 1, ControlMask = ExecutionSpeed, StateMask = saver && eco ? ExecutionSpeed : 0 };
+            SetProcessInformation(p.Handle, ProcessPowerThrottling, ref st, Marshal.SizeOf<PROCESS_POWER_THROTTLING_STATE>());
+        }
+        catch { }
+    }
+}
+
+/// <summary>
+/// Palettes: soft neumorphism, liquid glass (Apple-style: translucent rim-lit panes, regular variant, opaque fallbacks)
+/// and neon cyberpunk. Applied to application resources so every DynamicResource follows it.
+/// </summary>
 public static class Theme
 {
     public static bool Dark { get; private set; }
     public static bool Glass { get; private set; }
-    public static Color Base, Light, Shade, Text, Dim, Warn = Color.FromRgb(0xE6, 0xA2, 0x3C), Crit = Color.FromRgb(0xE5, 0x53, 0x4B);
+    public static bool Cyber { get; private set; }
+    public static bool PowerSaver { get; private set; }
+    public static CyberVariant? Variant { get; private set; }
+    public static Color Base, Light, Shade, Text, Dim, Highlight, Warn = Color.FromRgb(0xE6, 0xA2, 0x3C), Crit = Color.FromRgb(0xE5, 0x53, 0x4B);
     public static event Action? Changed;
 
-    public static Color Accent(string id) => id switch
-    {
-        "codex" => Color.FromRgb(0x2F, 0xCB, 0xA0),
-        "claude" => Color.FromRgb(0xE0, 0x87, 0x5A),
-        "opencode" => Color.FromRgb(0x9B, 0x87, 0xF5),
-        _ => Color.FromRgb(0x5A, 0xA9, 0xE6),
-    };
+    public static Color Accent(string id) => Cyber && Variant is { } v
+        ? id switch
+        {
+            "codex" => v.Codex,
+            "claude" => v.Claude,
+            "opencode" => v.Open,
+            _ => v.Primary,
+        }
+        : id switch
+        {
+            "codex" => Color.FromRgb(0x2F, 0xCB, 0xA0),
+            "claude" => Color.FromRgb(0xE0, 0x87, 0x5A),
+            "opencode" => Color.FromRgb(0x9B, 0x87, 0xF5),
+            _ => Color.FromRgb(0x5A, 0xA9, 0xE6),
+        };
 
     public static Color Level(double? percent, Color accent) => percent switch { >= 85 => Crit, >= 60 => Warn, _ => accent };
 
+    const string Personalize = @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+
     public static bool SystemDark()
     {
-        try { return Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1) is int v && v == 0; }
+        try { return Registry.GetValue(Personalize, "AppsUseLightTheme", 1) is int v && v == 0; }
         catch { return false; }
     }
+
+    /// <summary>Windows "Transparency effects" off, or high contrast on: glass falls back to opaque surfaces and stronger rims.</summary>
+    static bool ReduceTransparency()
+    {
+        try { if (Registry.GetValue(Personalize, "EnableTransparency", 1) is int v && v == 0) return true; }
+        catch { }
+        return SystemParameters.HighContrast;
+    }
+
+    static SolidColorBrush B(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+    static Color A(byte a, Color c) => Color.FromArgb(a, c.R, c.G, c.B);
+    static T Frozen<T>(T f) where T : Freezable { f.Freeze(); return f; }
+    static Color Mix(Color a, Color b, double t) => Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
+    static LinearGradientBrush Grad(Point from, Point to, params (Color c, double at)[] stops) =>
+        Frozen(new LinearGradientBrush(new GradientStopCollection(stops.Select(s => new GradientStop(s.c, s.at))), from, to));
 
     public static void Apply(Settings st)
     {
         if (st.Theme == "glass") { st.Theme = "auto"; st.Style = "glass"; } // older settings files
+        Cyber = st.Style == "cyber";
+        Variant = Cyber ? CyberVariant.Get(st.CyberVariant) : null;
+        PowerSaver = st.PowerSaver;
         Glass = st.Style == "glass";
-        Dark = st.Theme == "dark" || (st.Theme != "light" && SystemDark());
-        if (Glass && Dark) { Base = Color.FromRgb(0x0B, 0x10, 0x24); Light = Color.FromRgb(0x6E, 0x80, 0xB0); Shade = Color.FromRgb(0x05, 0x08, 0x18); Text = Color.FromRgb(0xF2, 0xF6, 0xFF); Dim = Color.FromRgb(0xB8, 0xC6, 0xE4); }
+        Dark = Cyber ? Variant!.Dark : st.Theme == "dark" || (st.Theme != "light" && SystemDark());   // each cyber sub-theme is either dark or light
+        var opaque = Glass && ReduceTransparency();
+
+        Highlight = Accent("codex");
+        Warn = Color.FromRgb(0xE6, 0xA2, 0x3C); Crit = Color.FromRgb(0xE5, 0x53, 0x4B);
+        if (Cyber) { var v = Variant!; Base = v.Base; Light = v.Primary; Shade = v.Ink; Text = v.Text; Dim = v.Dim; Warn = v.Warn; Crit = v.Crit; Highlight = v.Primary; }
+        else if (Glass && Dark) { Base = Color.FromRgb(0x0B, 0x10, 0x24); Light = Color.FromRgb(0x6E, 0x80, 0xB0); Shade = Color.FromRgb(0x05, 0x08, 0x18); Text = Color.FromRgb(0xF2, 0xF6, 0xFF); Dim = Color.FromRgb(0xB8, 0xC6, 0xE4); }
         else if (Glass) { Base = Color.FromRgb(0xE9, 0xEE, 0xFA); Light = Colors.White; Shade = Color.FromRgb(0x8E, 0xA0, 0xC4); Text = Color.FromRgb(0x1B, 0x25, 0x3D); Dim = Color.FromRgb(0x4F, 0x5F, 0x80); }
         else if (Dark) { Base = Color.FromRgb(0x2A, 0x2E, 0x35); Light = Color.FromRgb(0x38, 0x3D, 0x46); Shade = Color.FromRgb(0x1B, 0x1E, 0x23); Text = Color.FromRgb(0xE9, 0xEC, 0xF2); Dim = Color.FromRgb(0x9A, 0xA3, 0xB2); }
         else { Base = Color.FromRgb(0xE4, 0xE8, 0xEE); Light = Colors.White; Shade = Color.FromRgb(0xA9, 0xB4, 0xC6); Text = Color.FromRgb(0x34, 0x3B, 0x48); Dim = Color.FromRgb(0x7A, 0x84, 0x96); }
 
         var r = Application.Current.Resources;
-        static SolidColorBrush B(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
         r["BaseBrush"] = B(Base); r["TextBrush"] = B(Text); r["DimBrush"] = B(Dim); r["LightBrush"] = B(Light); r["ShadeBrush"] = B(Shade);
-        r["WarnBrush"] = B(Warn); r["CritBrush"] = B(Crit);
-        if (Glass)
+        r["WarnBrush"] = B(Warn); r["CritBrush"] = B(Crit); r["HighlightBrush"] = B(Highlight);
+        r["CardSheen"] = null;
+        r["CardBorderThickness"] = new Thickness(1);
+        r["CardRadius"] = new CornerRadius(20); r["DockRightRadius"] = new CornerRadius(20, 0, 0, 20); r["DockLeftRadius"] = new CornerRadius(0, 20, 20, 0);
+        r["ButtonRadius"] = new CornerRadius(14); r["RoundRadius"] = new CornerRadius(20);
+        // slim, discreet scrollbar that follows the palette
+        r["ScrollThumb"] = B(A(Dark ? (byte)0x50 : (byte)0x70, Cyber ? Highlight : Dim));
+        r["ScrollThumbHot"] = B(A(0xC0, Cyber ? Highlight : Dim));
+
+        if (Cyber)
+        {
+            var v = Variant!;
+            r["WindowBrush"] = CyberBackground(v);
+            r["CardBack"] = B(A(Dark ? (byte)0xF0 : (byte)0xEC, Base));
+            var fa = Dark ? (byte)0x26 : (byte)0x1C;
+            r["CardFill"] = Grad(new Point(0, 0), new Point(1, 1), (A(fa, v.Primary), 0), (A((byte)(fa / 2), Mix(v.Primary, v.Secondary, 0.5)), 0.55), (A((byte)(fa * 0.9), v.Secondary), 1));
+            r["CardBorder"] = Grad(new Point(0, 0), new Point(1, 1), (v.Primary, 0), (A(0x70, Mix(v.Primary, v.Secondary, 0.5)), 0.5), (v.Secondary, 1));
+            r["CardBorderThickness"] = new Thickness(1.5);
+            r["CardRadius"] = new CornerRadius(5); r["DockRightRadius"] = new CornerRadius(5, 0, 0, 5); r["DockLeftRadius"] = new CornerRadius(0, 5, 5, 0);
+            r["ButtonRadius"] = new CornerRadius(4); r["RoundRadius"] = new CornerRadius(4);
+            r["ShadowLight"] = null; r["ShadowLightSm"] = null;
+            // blurred glow = an offscreen bitmap per element: only when the user turned the power saver off
+            r["ShadowDark"] = PowerSaver ? null : Glow(v.Primary, 16, Dark ? 0.38 : 0.28);
+            r["ShadowDarkSm"] = PowerSaver ? null : Glow(v.Secondary, 8, Dark ? 0.4 : 0.3);
+        }        else if (Glass)
         {
             r["WindowBrush"] = GlassBackground(Dark);
-            // the panes stay mostly opaque so numbers never fight with whatever is behind the widget
-            r["CardBack"] = B(Dark ? Color.FromArgb(0xE8, 0x0B, 0x10, 0x24) : Color.FromArgb(0xEE, 0xF4, 0xF7, 0xFF));
-            r["CardFill"] = Frozen(new LinearGradientBrush(new GradientStopCollection { new(Dark ? Color.FromArgb(0x38, 255, 255, 255) : Color.FromArgb(0x99, 255, 255, 255), 0), new(Dark ? Color.FromArgb(0x12, 200, 220, 255) : Color.FromArgb(0x33, 200, 215, 255), 1) }, new Point(0, 0), new Point(1, 1)));
-            r["CardBorder"] = Frozen(new LinearGradientBrush(new GradientStopCollection { new(Color.FromArgb(Dark ? (byte)0xA0 : (byte)0xFF, 255, 255, 255), 0), new(Dark ? Color.FromArgb(0x1C, 160, 190, 255) : Color.FromArgb(0x70, 150, 170, 220), 0.5), new(Color.FromArgb(Dark ? (byte)0x55 : (byte)0xC0, 255, 255, 255), 1) }, new Point(0, 0), new Point(1, 1)));
-            // no blur effects in the glass look: each one costs an offscreen bitmap per element, the rim and fill carry the depth
+            // Apple's rule: text-heavy surfaces use the regular variant, never clear glass. Panes stay mostly opaque so numbers never fight
+            // with what is behind them; the rim and a specular sheen cast from the top edge carry the material. Reduce Transparency = opaque.
+            r["CardBack"] = B(opaque ? Base : Dark ? Color.FromArgb(0xE8, 0x0B, 0x10, 0x24) : Color.FromArgb(0xEE, 0xF4, 0xF7, 0xFF));
+            r["CardFill"] = opaque
+                ? B(Dark ? Color.FromArgb(0x30, 255, 255, 255) : Color.FromArgb(0x60, 255, 255, 255))
+                : Grad(new Point(0, 0), new Point(1, 1), (Dark ? Color.FromArgb(0x38, 255, 255, 255) : Color.FromArgb(0x99, 255, 255, 255), 0), (Dark ? Color.FromArgb(0x12, 200, 220, 255) : Color.FromArgb(0x33, 200, 215, 255), 1));
+            r["CardBorder"] = opaque
+                ? B(Dark ? Color.FromRgb(0xC8, 0xD2, 0xF0) : Color.FromRgb(0x4F, 0x5F, 0x80))
+                : Grad(new Point(0, 0), new Point(1, 1), (Color.FromArgb(Dark ? (byte)0xB4 : (byte)0xFF, 255, 255, 255), 0), (Dark ? Color.FromArgb(0x1C, 160, 190, 255) : Color.FromArgb(0x70, 150, 170, 220), 0.5), (Color.FromArgb(Dark ? (byte)0x5A : (byte)0xC0, 255, 255, 255), 1));
+            if (!opaque)
+                r["CardSheen"] = Grad(new Point(0.5, 0), new Point(0.5, 1), (Color.FromArgb(Dark ? (byte)0x30 : (byte)0x80, 255, 255, 255), 0), (Color.FromArgb(Dark ? (byte)0x0A : (byte)0x20, 255, 255, 255), 0.35), (Colors.Transparent, 0.6));
+            // no blur effects in the glass look: each one costs an offscreen bitmap per element
             r["ShadowLight"] = null; r["ShadowDark"] = null; r["ShadowLightSm"] = null; r["ShadowDarkSm"] = null;
         }
         else
         {
             r["WindowBrush"] = r["BaseBrush"]; r["CardBack"] = r["BaseBrush"]; r["CardFill"] = r["BaseBrush"]; r["CardBorder"] = B(Colors.Transparent);
-            r["ShadowLight"] = Shadow(Light, -5, 14); r["ShadowDark"] = Shadow(Shade, 5, 14);
-            r["ShadowLightSm"] = Shadow(Light, -3, 8); r["ShadowDarkSm"] = Shadow(Shade, 3, 8);
+            if (PowerSaver)
+            {
+                // same soft look without blurred drop shadows (each one is an offscreen bitmap): light rim top-left, shade rim bottom-right
+                r["CardBorder"] = Grad(new Point(0, 0), new Point(1, 1), (A(Dark ? (byte)0xB0 : (byte)0xFF, Light), 0), (A(0x10, Light), 0.45), (A(0xC0, Shade), 1));
+                r["CardBorderThickness"] = new Thickness(1.4);
+                r["ShadowLight"] = null; r["ShadowDark"] = null; r["ShadowLightSm"] = null; r["ShadowDarkSm"] = null;
+            }
+            else
+            {
+                r["ShadowLight"] = Shadow(Light, -5, 14); r["ShadowDark"] = Shadow(Shade, 5, 14);
+                r["ShadowLightSm"] = Shadow(Light, -3, 8); r["ShadowDarkSm"] = Shadow(Shade, 3, 8);
+            }
         }
+
+        userCompact = st.Density == "compact";
+        lastDensity = null;
+        SetDensity(0);
         Changed?.Invoke();
     }
 
-    static T Frozen<T>(T f) where T : Freezable { f.Freeze(); return f; }
+    static bool userCompact;
+    static int? lastDensity;
+
+    /// <summary>Spacing tokens. level 0 = the user's density, 1 = compact, 2 = tight (used by the auto-fit when the window is small).</summary>
+    public static void SetDensity(int level)
+    {
+        var lv = level >= 2 ? 2 : level == 1 || userCompact ? 1 : 0;
+        if (lastDensity == lv) return;
+        lastDensity = lv;
+        var r = Application.Current.Resources;
+        r["CardPadding"] = lv == 2 ? new Thickness(10, 7, 10, 7) : lv == 1 ? new Thickness(12, 9, 12, 9) : new Thickness(16, 14, 16, 14);
+        r["CardMargin"] = new Thickness(lv == 2 ? 3 : lv == 1 ? 5 : 10);
+        r["RowGap"] = new Thickness(0, lv == 2 ? 3 : lv == 1 ? 4 : 8, 0, 0);
+    }
+
+    // ---- window chrome (title bar + border) so a dark theme never shows a white frame ---------------------------
+
+    [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+    const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20, DWMWA_BORDER_COLOR = 34, DWMWA_CAPTION_COLOR = 35, DWMWA_TEXT_COLOR = 36;
+    const int DWMWA_COLOR_DEFAULT = unchecked((int)0xFFFFFFFF);
+
+    static int Rgb(Color c) => c.R | (c.G << 8) | (c.B << 16);
+
+    /// <summary>Paints the native title bar and window border with the palette (Windows 11; older systems ignore it).</summary>
+    public static void ApplyChrome(Window w)
+    {
+        var h = new WindowInteropHelper(w).Handle;
+        if (h == IntPtr.Zero) return;
+        try
+        {
+            var dark = Dark ? 1 : 0;
+            DwmSetWindowAttribute(h, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, 4);
+            var cap = Dark ? Rgb(Base) : DWMWA_COLOR_DEFAULT;
+            var txt = Dark ? Rgb(Text) : DWMWA_COLOR_DEFAULT;
+            var border = Cyber && Variant is { } cv ? Rgb(Mix(cv.Base, cv.Primary, Dark ? 0.55 : 0.7)) : Dark ? Rgb(Glass ? Color.FromRgb(0x2E, 0x39, 0x66) : Color.FromRgb(0x3A, 0x3F, 0x4A)) : DWMWA_COLOR_DEFAULT;
+            DwmSetWindowAttribute(h, DWMWA_CAPTION_COLOR, ref cap, 4);
+            DwmSetWindowAttribute(h, DWMWA_TEXT_COLOR, ref txt, 4);
+            DwmSetWindowAttribute(h, DWMWA_BORDER_COLOR, ref border, 4);
+        }
+        catch { }
+    }
 
     /// <summary>Deep night gradient with soft violet and cyan glows behind the translucent cards.</summary>
     static Brush GlassBackground(bool dark)
@@ -128,10 +283,35 @@ public static class Theme
         group.Children.Add(new GeometryDrawing(bg, null, new RectangleGeometry(new Rect(0, 0, 100, 100))));
         group.Children.Add(new GeometryDrawing(Glow(0x8B, 0x5C, 0xF6, dark ? (byte)0x90 : (byte)0x55), null, new EllipseGeometry(new Point(18, 12), 55, 45)));
         group.Children.Add(new GeometryDrawing(Glow(0x22, 0xD3, 0xEE, dark ? (byte)0x70 : (byte)0x50), null, new EllipseGeometry(new Point(88, 92), 55, 50)));
-        group.Children.Add(new GeometryDrawing(Glow(0xF4, 0x72, 0xB6, dark ? (byte)0x40 : (byte)0x40), null, new EllipseGeometry(new Point(92, 8), 35, 30)));
+        group.Children.Add(new GeometryDrawing(Glow(0xF4, 0x72, 0xB6, (byte)0x40), null, new EllipseGeometry(new Point(92, 8), 35, 30)));
         var brush = new DrawingBrush(group) { Stretch = Stretch.Fill, Viewbox = new Rect(0, 0, 100, 100), ViewboxUnits = BrushMappingMode.Absolute };
+        RenderOptions.SetCachingHint(brush, CachingHint.Cache);
         brush.Freeze();
         return brush;
+    }
+
+    /// <summary>Backdrop of a cyberpunk sub-theme: three-stop gradient, a faint grid of the primary colour and two corner glows. Cached as a bitmap.</summary>
+    static Brush CyberBackground(CyberVariant v)
+    {
+        static RadialGradientBrush Glow(Color c, byte a) => new(Color.FromArgb(a, c.R, c.G, c.B), Color.FromArgb(0, c.R, c.G, c.B));
+        var bg = new LinearGradientBrush(new GradientStopCollection { new(v.BgA, 0), new(v.BgB, 0.55), new(v.BgC, 1) }, new Point(0, 0), new Point(1, 1));
+        var group = new DrawingGroup { ClipGeometry = new RectangleGeometry(new Rect(0, 0, 100, 100)) };
+        group.Children.Add(new GeometryDrawing(bg, null, new RectangleGeometry(new Rect(0, 0, 100, 100))));
+        group.Children.Add(new GeometryDrawing(Glow(v.Glow1, v.Dark ? (byte)0x70 : (byte)0x60), null, new EllipseGeometry(new Point(90, 8), 55, 40)));
+        group.Children.Add(new GeometryDrawing(Glow(v.Glow2, v.Dark ? (byte)0x60 : (byte)0x55), null, new EllipseGeometry(new Point(8, 94), 60, 45)));
+        var grid = new GeometryGroup();
+        for (var i = 1; i < 10; i++) { grid.Children.Add(new LineGeometry(new Point(i * 10, 0), new Point(i * 10, 100))); grid.Children.Add(new LineGeometry(new Point(0, i * 10), new Point(100, i * 10))); }
+        group.Children.Add(new GeometryDrawing(null, new Pen(new SolidColorBrush(A(v.Dark ? (byte)0x16 : (byte)0x1C, v.Primary)), 0.12), grid));
+        var brush = new DrawingBrush(group) { Stretch = Stretch.Fill, Viewbox = new Rect(0, 0, 100, 100), ViewboxUnits = BrushMappingMode.Absolute };
+        RenderOptions.SetCachingHint(brush, CachingHint.Cache);   // rasterised once instead of re-drawn on every repaint
+        brush.Freeze();
+        return brush;
+    }
+    static DropShadowEffect Glow(Color c, double blur, double opacity)
+    {
+        var e = new DropShadowEffect { Color = c, BlurRadius = blur, ShadowDepth = 0, Opacity = opacity, RenderingBias = RenderingBias.Performance };
+        e.Freeze();
+        return e;
     }
 
     static DropShadowEffect Shadow(Color c, double offset, double blur)

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -106,7 +106,10 @@ public static class Cli
         foreach (var a in cmd.Prefix.Concat(args)) psi.ArgumentList.Add(a);
         CleanEnvironment(psi);
         configure?.Invoke(psi);
-        return Process.Start(psi) ?? throw new UsageException("CLI_START_FAILED");
+        var proc = Process.Start(psi) ?? throw new UsageException("CLI_START_FAILED");
+        // the collectors are background work: never let them compete with what the user is doing
+        try { proc.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
+        return proc;
     }
 
     public static void Kill(Process p)

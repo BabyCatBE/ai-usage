@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace Usage.Core;
 
@@ -127,6 +127,9 @@ public sealed class UsageService : IDisposable
         catch { /* the cache is best-effort */ }
     }
 
+    /// <summary>Checked before every automatic tick (not before manual or on-demand refreshes). Return true to skip it.</summary>
+    public Func<bool>? SkipAutoRefresh { get; set; }
+
     public void StartAutoRefresh(TimeSpan interval)
     {
         StopAutoRefresh();
@@ -137,7 +140,11 @@ public sealed class UsageService : IDisposable
             try
             {
                 await RefreshAsync(cts.Token);
-                while (await timer.WaitForNextTickAsync(cts.Token)) await RefreshAsync(cts.Token);
+                while (await timer.WaitForNextTickAsync(cts.Token))
+                {
+                    bool skip; try { skip = SkipAutoRefresh?.Invoke() == true; } catch { skip = false; }
+                    if (!skip) await RefreshAsync(cts.Token);
+                }
             }
             catch (OperationCanceledException) { }
         });

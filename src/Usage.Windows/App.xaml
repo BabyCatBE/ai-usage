@@ -8,30 +8,33 @@
         <!-- Raised surface: two stacked layers, one light shadow top-left and one dark shadow bottom-right. -->
         <ControlTemplate x:Key="RaisedTemplate" TargetType="ContentControl">
             <Grid>
-                <Border Background="{DynamicResource CardBack}" CornerRadius="20" Effect="{DynamicResource ShadowLight}"/>
-                <Border Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="20" Effect="{DynamicResource ShadowDark}"/>
+                <Border Background="{DynamicResource CardBack}" CornerRadius="{DynamicResource CardRadius}" Effect="{DynamicResource ShadowLight}"/>
+                <Border Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="{DynamicResource CardBorderThickness}" CornerRadius="{DynamicResource CardRadius}" Effect="{DynamicResource ShadowDark}"/>
+                <Border Background="{DynamicResource CardSheen}" CornerRadius="{DynamicResource CardRadius}" IsHitTestVisible="False"/>
                 <ContentPresenter Margin="{TemplateBinding Padding}"/>
             </Grid>
         </ControlTemplate>
         <!-- Docked variants: only the corners facing the screen interior are rounded. -->
         <ControlTemplate x:Key="DockRightTemplate" TargetType="ContentControl">
             <Grid>
-                <Border Background="{DynamicResource CardBack}" CornerRadius="20,0,0,20" Effect="{DynamicResource ShadowLight}"/>
-                <Border Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="20,0,0,20" Effect="{DynamicResource ShadowDark}"/>
+                <Border Background="{DynamicResource CardBack}" CornerRadius="{DynamicResource DockRightRadius}" Effect="{DynamicResource ShadowLight}"/>
+                <Border Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="{DynamicResource CardBorderThickness}" CornerRadius="{DynamicResource DockRightRadius}" Effect="{DynamicResource ShadowDark}"/>
+                <Border Background="{DynamicResource CardSheen}" CornerRadius="{DynamicResource DockRightRadius}" IsHitTestVisible="False"/>
                 <ContentPresenter Margin="{TemplateBinding Padding}"/>
             </Grid>
         </ControlTemplate>
         <ControlTemplate x:Key="DockLeftTemplate" TargetType="ContentControl">
             <Grid>
-                <Border Background="{DynamicResource CardBack}" CornerRadius="0,20,20,0" Effect="{DynamicResource ShadowLight}"/>
-                <Border Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="0,20,20,0" Effect="{DynamicResource ShadowDark}"/>
+                <Border Background="{DynamicResource CardBack}" CornerRadius="{DynamicResource DockLeftRadius}" Effect="{DynamicResource ShadowLight}"/>
+                <Border Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="{DynamicResource CardBorderThickness}" CornerRadius="{DynamicResource DockLeftRadius}" Effect="{DynamicResource ShadowDark}"/>
+                <Border Background="{DynamicResource CardSheen}" CornerRadius="{DynamicResource DockLeftRadius}" IsHitTestVisible="False"/>
                 <ContentPresenter Margin="{TemplateBinding Padding}"/>
             </Grid>
         </ControlTemplate>
         <Style x:Key="Card" TargetType="ContentControl">
             <Setter Property="Template" Value="{StaticResource RaisedTemplate}"/>
-            <Setter Property="Padding" Value="16,14"/>
-            <Setter Property="Margin" Value="10"/>
+            <Setter Property="Padding" Value="{DynamicResource CardPadding}"/>
+            <Setter Property="Margin" Value="{DynamicResource CardMargin}"/>
             <Setter Property="Focusable" Value="False"/>
         </Style>
 
@@ -59,9 +62,10 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid x:Name="root" Background="Transparent">
-                            <Border x:Name="light" Background="{DynamicResource CardBack}" CornerRadius="14" Effect="{DynamicResource ShadowLightSm}"/>
-                            <Border x:Name="dark" Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="14" Effect="{DynamicResource ShadowDarkSm}"/>
-                            <Border x:Name="pressed" CornerRadius="14" Opacity="0" Background="{DynamicResource ShadeBrush}"/>
+                            <Border x:Name="light" Background="{DynamicResource CardBack}" CornerRadius="{DynamicResource ButtonRadius}" Effect="{DynamicResource ShadowLightSm}"/>
+                            <Border x:Name="dark" Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="{DynamicResource ButtonRadius}" Effect="{DynamicResource ShadowDarkSm}"/>
+                            <Border x:Name="pressed" CornerRadius="{DynamicResource ButtonRadius}" Opacity="0" Background="{DynamicResource ShadeBrush}"/>
+                            <Border x:Name="hover" CornerRadius="{DynamicResource ButtonRadius}" Opacity="0" Background="{DynamicResource HighlightBrush}" IsHitTestVisible="False"/>
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -89,12 +93,16 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid Background="Transparent">
-                            <Ellipse x:Name="light" Fill="{DynamicResource CardBack}" Effect="{DynamicResource ShadowLightSm}"/>
-                            <Ellipse x:Name="dark" Fill="{DynamicResource CardFill}" Stroke="{DynamicResource CardBorder}" StrokeThickness="1" Effect="{DynamicResource ShadowDarkSm}"/>
-                            <Ellipse x:Name="pressed" Opacity="0" Fill="{DynamicResource ShadeBrush}"/>
+                            <Border x:Name="light" Background="{DynamicResource CardBack}" CornerRadius="{DynamicResource RoundRadius}" Effect="{DynamicResource ShadowLightSm}"/>
+                            <Border x:Name="dark" Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="{DynamicResource RoundRadius}" Effect="{DynamicResource ShadowDarkSm}"/>
+                            <Border x:Name="pressed" Opacity="0" Background="{DynamicResource ShadeBrush}" CornerRadius="{DynamicResource RoundRadius}"/>
+                            <Border x:Name="hover" Opacity="0" Background="{DynamicResource HighlightBrush}" CornerRadius="{DynamicResource RoundRadius}" IsHitTestVisible="False"/>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="hover" Property="Opacity" Value="0.12"/>
+                            </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="light" Property="Effect" Value="{x:Null}"/>
                                 <Setter TargetName="dark" Property="Effect" Value="{x:Null}"/>
@@ -129,6 +137,68 @@
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
             <Setter Property="Margin" Value="0,6"/>
             <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <Style x:Key="ScrollGhost" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ScrollThumbStyle" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="bar" Background="{DynamicResource ScrollThumb}" CornerRadius="3"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bar" Property="Background" Value="{DynamicResource ScrollThumbHot}"/></Trigger>
+                            <Trigger Property="IsDragging" Value="True"><Setter TargetName="bar" Property="Background" Value="{DynamicResource ScrollThumbHot}"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- Slim, discreet scrollbar: invisible track, thin rounded thumb that follows the palette and grows on hover. -->
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Width" Value="7"/>
+            <Setter Property="MinWidth" Value="7"/>
+            <Setter Property="Cursor" Value="Arrow"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="Transparent" SnapsToDevicePixels="True">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageUpCommand" Style="{StaticResource ScrollGhost}"/></Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageDownCommand" Style="{StaticResource ScrollGhost}"/></Track.IncreaseRepeatButton>
+                                <Track.Thumb><Thumb Style="{StaticResource ScrollThumbStyle}" Margin="1,1"/></Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Width" Value="Auto"/>
+                    <Setter Property="MinWidth" Value="0"/>
+                    <Setter Property="Height" Value="7"/>
+                    <Setter Property="MinHeight" Value="7"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ScrollBar">
+                                <Grid Background="Transparent" SnapsToDevicePixels="True">
+                                    <Track x:Name="PART_Track" IsDirectionReversed="False">
+                                        <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageLeftCommand" Style="{StaticResource ScrollGhost}"/></Track.DecreaseRepeatButton>
+                                        <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageRightCommand" Style="{StaticResource ScrollGhost}"/></Track.IncreaseRepeatButton>
+                                        <Track.Thumb><Thumb Style="{StaticResource ScrollThumbStyle}" Margin="1,1"/></Track.Thumb>
+                                    </Track>
+                                </Grid>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Application.Resources>
 </Application>
