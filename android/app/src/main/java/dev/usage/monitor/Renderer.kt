@@ -81,7 +81,7 @@ object Renderer {
     }
 
     fun pickLevel(s: UiState, heightDp: Float): Level =
-        Level.entries.firstOrNull { naturalHeightDp(s, it) <= heightDp * 1.12f } ?: Level.MICRO
+        Level.entries.firstOrNull { naturalHeightDp(s, it) <= heightDp * 1.2f } ?: Level.MICRO
 
     // ---- entry points ------------------------------------------------------------------------------------
 
@@ -114,7 +114,7 @@ object Renderer {
         val ps = visible(s)
         if (level == Level.MICRO) { micro(c, w, h, ps, s, pal, now); return }
         header(c, w, s, pal, now)
-        val extra = if (ps.isEmpty()) 0f else ((h - naturalHeightDp(s, level)) / ps.size).coerceIn(0f, 14f)
+        val extra = if (ps.isEmpty()) 0f else ((h - naturalHeightDp(s, level)) / ps.size).coerceIn(0f, 24f)
         var y = PAD + HEADER + 6f + extra / 2
         if (ps.isEmpty()) { emptyCard(c, w, y, s, pal); return }
         for (p in ps) {
