@@ -44,9 +44,9 @@ public partial class App : Application
         if (!first) { showSignal.Set(); Shutdown(); return; }
 
         var settings = Settings.Load();
-        Theme.Apply(settings.Theme);
+        Theme.Apply(settings);
         state = new AppState();
-        Theme.Apply(state.Settings.Theme);
+        Theme.Apply(state.Settings);
         main = new MainWindow(state) { Icon = IconSource() };
         if (state.Settings.StartWithWindows) Autostart.Set(true);
 
@@ -56,7 +56,7 @@ public partial class App : Application
 
         // second launches ask the first one to show its window
         new Thread(() => { while (showSignal.WaitOne()) Dispatcher.BeginInvoke(ShowMain); }) { IsBackground = true }.Start();
-        SystemEvents.UserPreferenceChanged += (_, _) => Dispatcher.BeginInvoke(() => { if (state.Settings.Theme == "auto") { Theme.Apply("auto"); state.Rebuild(); } });
+        SystemEvents.UserPreferenceChanged += (_, _) => Dispatcher.BeginInvoke(() => { if (state.Settings.Theme == "auto") { Theme.Apply(state.Settings); state.Rebuild(); } });
         SystemEvents.DisplaySettingsChanged += (_, _) => Dispatcher.BeginInvoke(() => widget?.ApplySettings());
 
         if (!e.Args.Contains("--background")) ShowMain();

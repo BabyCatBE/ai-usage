@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using QRCoder;
@@ -148,11 +149,25 @@ public partial class MainWindow : Window
             revoke.Click += (_, _) => state.Devices.Remove(id);
             DockPanel.SetDock(revoke, Dock.Right);
             row.Children.Add(revoke);
+            var rename = new Button { Content = Loc.T("Renomear", "Rename"), Style = (Style)FindResource("NeuButton"), Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(10, 5, 10, 5), FontSize = 12 };
+            DockPanel.SetDock(rename, Dock.Right);
+            row.Children.Add(rename);
             var dot = new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Fill = online ? new SolidColorBrush(Theme.Accent("codex")) : (Brush)FindResource("DimBrush") };
             DockPanel.SetDock(dot, Dock.Left);
             row.Children.Add(dot);
             var text = new StackPanel();
-            text.Children.Add(new TextBlock { Text = d.Name, Style = (Style)FindResource("Label"), FontWeight = FontWeights.SemiBold });
+            var nameText = new TextBlock { Text = d.Name, Style = (Style)FindResource("Label"), FontWeight = FontWeights.SemiBold };
+            text.Children.Add(nameText);
+            rename.Click += (_, _) =>
+            {
+                var box = new TextBox { Text = d.Name, Style = (Style)FindResource("NeuText"), Padding = new Thickness(8, 3, 8, 3), MaxLength = 40 };
+                var done = false;
+                void Commit() { if (done) return; done = true; state.Devices.Rename(id, box.Text); RefreshDevices(); }
+                box.KeyDown += (_, e) => { if (e.Key == Key.Enter) Commit(); else if (e.Key == Key.Escape) { done = true; RefreshDevices(); } };
+                box.LostFocus += (_, _) => Commit();
+                var i = text.Children.IndexOf(nameText); text.Children.RemoveAt(i); text.Children.Insert(i, box);
+                box.Focus(); box.SelectAll();
+            };
             text.Children.Add(new TextBlock
             {
                 Style = (Style)FindResource("Dim"),
@@ -197,6 +212,8 @@ public partial class MainWindow : Window
         Caption(Loc.T("Idioma", "Language"));
         Choice(["auto", "pt", "en"], [Loc.T("Automático", "Automatic"), "Português", "English"], st.Language, v => st.Language = v);
         Caption(Loc.T("Tema", "Theme"));
+        Choice(["neu", "glass"], ["Neumorphism", "Liquid glass"], st.Style, v => st.Style = v);
+        Caption(Loc.T("Modo", "Mode"));
         Choice(["auto", "light", "dark"], [Loc.T("Automático", "Automatic"), Loc.T("Claro", "Light"), Loc.T("Escuro", "Dark")], st.Theme, v => st.Theme = v);
         Caption(Loc.T("Ícones dos provedores", "Provider icons"));
         void IconCheck()

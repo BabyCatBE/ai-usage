@@ -36,12 +36,11 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = Store(this)
-        val dark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        pal = Palette(dark)
+        pal = store.palette(this)
         window.statusBarColor = pal.base
         window.navigationBarColor = pal.base
         window.decorView // installs the decor view; insetsController is null before it exists
-        if (!dark && android.os.Build.VERSION.SDK_INT >= 30)
+        if (!pal.dark && android.os.Build.VERSION.SDK_INT >= 30)
             window.insetsController?.setSystemBarsAppearance(
                 android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
                 android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
@@ -106,7 +105,7 @@ class MainActivity : Activity() {
 
     private fun build() {
         val scroll = ScrollView(this).apply {
-            setBackgroundColor(pal.base); isFillViewport = true; overScrollMode = View.OVER_SCROLL_NEVER
+            if (pal.glass) background = GlassBackdrop(pal.dark) else setBackgroundColor(pal.base); isFillViewport = true; overScrollMode = View.OVER_SCROLL_NEVER
             setOnApplyWindowInsetsListener { v, insets ->
                 v.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom); insets
             }
@@ -149,6 +148,16 @@ class MainActivity : Activity() {
         fun fill() {
             p.removeAllViews()
             p.addView(label(if (Fmt.pt) "Aparência" else "Appearance", 17f, pal.text, true))
+            p.addView(label(if (Fmt.pt) "Tema" else "Theme", 13f, pal.dim).apply { setPadding(dpi(4f), dpi(8f), 0, dpi(2f)) })
+            val looks = listOf("neu" to "Neumorphism", "glass" to "Liquid glass")
+            row(p, *looks.map { (id, name) -> Neu.button(this, pal, name, if (store.style == id) pal.accent("codex") else null) {
+                if (store.style != id) { store.style = id; UsageWidget.updateAll(this); recreate() }
+            } }.toTypedArray())
+            p.addView(label(if (Fmt.pt) "Modo" else "Mode", 13f, pal.dim).apply { setPadding(dpi(4f), dpi(8f), 0, dpi(2f)) })
+            val modes = listOf("auto" to (if (Fmt.pt) "Automático" else "Automatic"), "light" to (if (Fmt.pt) "Claro" else "Light"), "dark" to (if (Fmt.pt) "Escuro" else "Dark"))
+            row(p, *modes.map { (id, name) -> Neu.button(this, pal, name, if (store.theme == id) pal.accent("codex") else null) {
+                if (store.theme != id) { store.theme = id; UsageWidget.updateAll(this); recreate() }
+            } }.toTypedArray())
             val on = store.showIcons
             row(p, Neu.button(this, pal, (if (Fmt.pt) "Ícones: " else "Icons: ") + (if (on) (if (Fmt.pt) "ligados" else "on") else (if (Fmt.pt) "desligados" else "off")), if (on) pal.accent("codex") else pal.dim) {
                 store.showIcons = !store.showIcons; applyAppearance(); fill()

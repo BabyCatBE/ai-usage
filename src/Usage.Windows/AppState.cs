@@ -1,4 +1,4 @@
-using System.Windows.Media;
+﻿using System.Windows.Media;
 using Usage.Core;
 using Usage.Core.Link;
 using Usage.Core.Providers;
@@ -66,7 +66,7 @@ public sealed class AppState : IDisposable
     public void Restart()
     {
         Loc.Apply(Settings.Language);
-        Theme.Apply(Settings.Theme);
+        Theme.Apply(Settings);
         Service.StartAutoRefresh(TimeSpan.FromMinutes(Math.Clamp(Settings.IntervalMinutes, 1, 60)));
         Rebuild();
     }

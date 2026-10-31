@@ -4,7 +4,7 @@
 
 **Português:** [role para a seção em português](#português)
 
-- **Soft neumorphism** look, light and dark, follows the system theme.
+- Two looks, **soft neumorphism** and **liquid glass**, each with light, dark or automatic mode (Windows and Android).
 - **Windows floating widget** docked to the middle of the right (or left) screen edge as a thin retracted tab, so it never covers window buttons: hover to expand every window of every provider, hover a provider for a detailed report (all windows, elapsed time, models, 24 h history).
 - **Provider icons** (ChatGPT/Codex, Claude/Claude Code mascot, OpenCode or a Go-plan model letter) with an on/off switch, on the widgets and in both apps.
 - **Windows app** that reflows from one to three columns, made to live in a split-screen on a second monitor.
@@ -65,7 +65,7 @@ MIT — see [LICENSE](LICENSE).
 
 Mostra quanto você já usou dos limites do **ChatGPT (Codex)**, **Claude** e **OpenCode Go** — janelas de 5 horas, semanal e mensal, e por modelo/produto quando o provedor informa — em um **widget flutuante do Windows**, um **app Windows** e um **app + widget Android**.
 
-- Visual **neumorphism suave**, claro e escuro.
+- Dois visuais, **neumorphism suave** e **liquid glass**, cada um com modo claro, escuro ou automático.
 - **Widget flutuante** fixo num canto: passe o mouse para expandir; passe o mouse num provedor para o relatório detalhado.
 - **App Windows** responsivo (1 a 3 colunas), feito para ficar numa tela secundária dividida com outros apps.
 - **App e widget Android** que funcionam em casa e fora dela, **sem VPN, sem banco de dados e sem conta**.

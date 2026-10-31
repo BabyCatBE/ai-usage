@@ -1,4 +1,4 @@
-using Usage.Core;
+﻿using Usage.Core;
 using Usage.Core.Link;
 
 // Headless hub: collects usage and serves paired phones through the relay. Runs on a PC or a VPS (24h).
@@ -21,6 +21,10 @@ switch (command)
     }
     case "devices":
         foreach (var d in devices.All()) Console.WriteLine($"{d.Id}  {d.Name}  {(d.Confirmed ? "paired" : "waiting")}  last seen: {d.LastSeen?.ToString("u") ?? "-"}");
+        return 0;
+    case "rename" when args.Length > 2:
+        devices.Rename(args[1], string.Join(' ', args.Skip(2)));
+        Console.WriteLine("Renamed " + args[1]);
         return 0;
     case "revoke" when args.Length > 1:
         devices.Remove(args[1]);

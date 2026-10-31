@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Usage.Core.Providers;
 
@@ -25,7 +25,8 @@ public sealed class Settings
 {
     public int IntervalMinutes { get; set; } = 5;
     public string Language { get; set; } = "auto";   // auto | pt | en
-    public string Theme { get; set; } = "auto";      // auto | light | dark
+    public string Theme { get; set; } = "auto";      // colour mode: auto | light | dark
+    public string Style { get; set; } = "neu";       // look: neu (soft neumorphism) | glass (liquid glass)
     public string RelayUrl { get; set; } = Defaults.Relay;
     public string WidgetEdge { get; set; } = "Right";   // Right | Left: docked to the middle of that screen edge
     public bool WidgetEnabled { get; set; } = true;

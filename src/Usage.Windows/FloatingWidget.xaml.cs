@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -34,6 +34,7 @@ public partial class FloatingWidget : Window
             SetWindowLong(h, GWL_EXSTYLE, GetWindowLong(h, GWL_EXSTYLE) | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
         };
         SizeChanged += (_, _) => Reposition();
+        Loaded += (_, _) => Fit();
         collapseTimer.Tick += (_, _) => { collapseTimer.Stop(); SetExpanded(false); };
         Root.MouseEnter += (_, _) => { collapseTimer.Stop(); SetExpanded(true); };
         Root.MouseLeave += (_, _) => collapseTimer.Start();
@@ -71,6 +72,20 @@ public partial class FloatingWidget : Window
     // ---- layout --------------------------------------------------------------------------------------------
 
     /// <summary>Flush against the screen edge, vertically centred: it never covers the title-bar buttons.</summary>
+    /// <summary>
+    /// Sizes the window to its content by hand. SizeToContent sometimes keeps the expanded width after the panel
+    /// collapses (the window then looks wide until the next hover), so the size is always set explicitly.
+    /// </summary>
+    void Fit()
+    {
+        Root.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var d = Root.DesiredSize;
+        if (d.Width <= 0 || d.Height <= 0) return;
+        if (Math.Abs(Width - d.Width) > 0.5 || double.IsNaN(Width)) Width = d.Width;
+        if (Math.Abs(Height - d.Height) > 0.5 || double.IsNaN(Height)) Height = d.Height;
+        Reposition();
+    }
+
     void Reposition()
     {
         if (ActualWidth <= 0) return;
@@ -89,6 +104,7 @@ public partial class FloatingWidget : Window
         var fade = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(160)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         (value ? (UIElement)Expanded : Collapsed).BeginAnimation(OpacityProperty, fade);
         Rebuild();
+        Fit();
     }
 
     // ---- content -------------------------------------------------------------------------------------------
@@ -109,11 +125,13 @@ public partial class FloatingWidget : Window
             Collapsed.Children.Add(cell);
         }
 
+        Dispatcher.BeginInvoke(Fit, DispatcherPriority.Loaded);
         if (!expanded) return;
         Expanded.Children.Clear();
         Expanded.Children.Add(new TextBlock { Text = state.StatusLine(), Style = (Style)FindResource("Dim"), FontSize = 11, Margin = new Thickness(2, 0, 0, 6) });
         foreach (var p in ps) Expanded.Children.Add(ProviderBlock(p));
         if (ps.Count == 0) Expanded.Children.Add(new TextBlock { Text = Loc.T("Aguardando dados…", "Waiting for data…"), Style = (Style)FindResource("Dim") });
+        Dispatcher.BeginInvoke(Fit, DispatcherPriority.Loaded);
     }
 
     FrameworkElement ProviderBlock(ProviderVM p)

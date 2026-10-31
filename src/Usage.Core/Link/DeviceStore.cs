@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace Usage.Core.Link;
 
@@ -59,6 +59,13 @@ public sealed class DeviceStore
     public void Remove(string id)
     {
         lock (sync) { devices.RemoveAll(d => d.Id == id); Save(); }
+        Changed?.Invoke();
+    }
+
+    public void Rename(string id, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return;
+        lock (sync) { var d = devices.FirstOrDefault(x => x.Id == id); if (d is null) return; d.Name = name.Trim(); Save(); }
         Changed?.Invoke();
     }
 

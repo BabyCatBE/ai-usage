@@ -69,7 +69,7 @@ class DashboardView @JvmOverloads constructor(context: Context, attrs: Attribute
     private var cache: Bitmap? = null
     private var cacheKey = ""
 
-    private val dark get() = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+    private val pal get() = Store(context).palette(context)
     private val level get() = Level.DETAIL
 
     fun invalidateCache() { cacheKey = "" ; invalidate() }
@@ -82,10 +82,10 @@ class DashboardView @JvmOverloads constructor(context: Context, attrs: Attribute
     override fun onDraw(canvas: Canvas) {
         if (width <= 0 || height <= 0) return
         val now = System.currentTimeMillis()
-        val key = "$width×$height|${now / 30_000}|${state.hashCode()}|$dark"
+        val key = "$width×$height|${now / 30_000}|${state.hashCode()}|${pal.dark}|${pal.glass}"
         if (key != cacheKey || cache == null) {
             cache?.recycle()
-            cache = Renderer.render(state, width, height, resources.displayMetrics.density, dark, now, level, rounded = false)
+            cache = Renderer.render(state, width, height, resources.displayMetrics.density, pal, now, level, rounded = false)
             cacheKey = key
         }
         canvas.drawBitmap(cache!!, 0f, 0f, null)
@@ -122,4 +122,12 @@ class IconChoice(context: Context, private val pal: Palette, private val iconId:
         Icons.draw(canvas, iconId, cx, cy, 14f * d, if (selected) accent else pal.dim)
         canvas.drawText(caption, cx, height - 14f * d, textPaint)
     }
+}
+
+/** Window backdrop for the glass theme, drawn by the same code as the widget. */
+class GlassBackdrop(private val dark: Boolean) : Drawable() {
+    override fun draw(canvas: Canvas) { Renderer.glassBackground(canvas, bounds.width().toFloat(), bounds.height().toFloat(), dark) }
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+    @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.OPAQUE
 }

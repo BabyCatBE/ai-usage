@@ -8,23 +8,23 @@
         <!-- Raised surface: two stacked layers, one light shadow top-left and one dark shadow bottom-right. -->
         <ControlTemplate x:Key="RaisedTemplate" TargetType="ContentControl">
             <Grid>
-                <Border Background="{DynamicResource BaseBrush}" CornerRadius="20" Effect="{DynamicResource ShadowLight}"/>
-                <Border Background="{DynamicResource BaseBrush}" CornerRadius="20" Effect="{DynamicResource ShadowDark}"/>
+                <Border Background="{DynamicResource CardBack}" CornerRadius="20" Effect="{DynamicResource ShadowLight}"/>
+                <Border Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="20" Effect="{DynamicResource ShadowDark}"/>
                 <ContentPresenter Margin="{TemplateBinding Padding}"/>
             </Grid>
         </ControlTemplate>
         <!-- Docked variants: only the corners facing the screen interior are rounded. -->
         <ControlTemplate x:Key="DockRightTemplate" TargetType="ContentControl">
             <Grid>
-                <Border Background="{DynamicResource BaseBrush}" CornerRadius="20,0,0,20" Effect="{DynamicResource ShadowLight}"/>
-                <Border Background="{DynamicResource BaseBrush}" CornerRadius="20,0,0,20" Effect="{DynamicResource ShadowDark}"/>
+                <Border Background="{DynamicResource CardBack}" CornerRadius="20,0,0,20" Effect="{DynamicResource ShadowLight}"/>
+                <Border Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="20,0,0,20" Effect="{DynamicResource ShadowDark}"/>
                 <ContentPresenter Margin="{TemplateBinding Padding}"/>
             </Grid>
         </ControlTemplate>
         <ControlTemplate x:Key="DockLeftTemplate" TargetType="ContentControl">
             <Grid>
-                <Border Background="{DynamicResource BaseBrush}" CornerRadius="0,20,20,0" Effect="{DynamicResource ShadowLight}"/>
-                <Border Background="{DynamicResource BaseBrush}" CornerRadius="0,20,20,0" Effect="{DynamicResource ShadowDark}"/>
+                <Border Background="{DynamicResource CardBack}" CornerRadius="0,20,20,0" Effect="{DynamicResource ShadowLight}"/>
+                <Border Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="0,20,20,0" Effect="{DynamicResource ShadowDark}"/>
                 <ContentPresenter Margin="{TemplateBinding Padding}"/>
             </Grid>
         </ControlTemplate>
@@ -59,8 +59,8 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid x:Name="root" Background="Transparent">
-                            <Border x:Name="light" Background="{DynamicResource BaseBrush}" CornerRadius="14" Effect="{DynamicResource ShadowLightSm}"/>
-                            <Border x:Name="dark" Background="{DynamicResource BaseBrush}" CornerRadius="14" Effect="{DynamicResource ShadowDarkSm}"/>
+                            <Border x:Name="light" Background="{DynamicResource CardBack}" CornerRadius="14" Effect="{DynamicResource ShadowLightSm}"/>
+                            <Border x:Name="dark" Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="14" Effect="{DynamicResource ShadowDarkSm}"/>
                             <Border x:Name="pressed" CornerRadius="14" Opacity="0" Background="{DynamicResource ShadeBrush}"/>
                             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
@@ -89,8 +89,8 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid Background="Transparent">
-                            <Ellipse x:Name="light" Fill="{DynamicResource BaseBrush}" Effect="{DynamicResource ShadowLightSm}"/>
-                            <Ellipse x:Name="dark" Fill="{DynamicResource BaseBrush}" Effect="{DynamicResource ShadowDarkSm}"/>
+                            <Ellipse x:Name="light" Fill="{DynamicResource CardBack}" Effect="{DynamicResource ShadowLightSm}"/>
+                            <Ellipse x:Name="dark" Fill="{DynamicResource CardFill}" Stroke="{DynamicResource CardBorder}" StrokeThickness="1" Effect="{DynamicResource ShadowDarkSm}"/>
                             <Ellipse x:Name="pressed" Opacity="0" Fill="{DynamicResource ShadeBrush}"/>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>

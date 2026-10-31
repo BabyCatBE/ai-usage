@@ -49,11 +49,10 @@ class UsageWidget : AppWidgetProvider() {
             val hDp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 400).coerceAtLeast(110)
             // Keep the bitmap well under the RemoteViews memory limit.
             val k = minOf(1f, Math.sqrt(1_800_000.0 / (wDp * density * hDp * density)).toFloat())
-            val dark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             val store = Store(context)
             val state = stateOf(store)
             val now = System.currentTimeMillis()
-            val bmp = Renderer.render(state, (wDp * density * k).toInt(), (hDp * density * k).toInt(), density * k, dark, now)
+            val bmp = Renderer.render(state, (wDp * density * k).toInt(), (hDp * density * k).toInt(), density * k, store.palette(context), now)
 
             val views = RemoteViews(context.packageName, R.layout.widget)
             views.setImageViewBitmap(R.id.image, bmp)

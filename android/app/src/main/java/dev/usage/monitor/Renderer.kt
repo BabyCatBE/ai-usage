@@ -3,6 +3,7 @@ package dev.usage.monitor
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
+import android.graphics.RadialGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -22,12 +23,12 @@ data class UiState(
 
 enum class Level { DETAIL, NORMAL, COMPACT, MICRO }
 
-class Palette(val dark: Boolean) {
-    val base = if (dark) 0xFF2A2E35.toInt() else 0xFFE4E8EE.toInt()
-    val light = if (dark) 0xFF383D46.toInt() else 0xFFFFFFFF.toInt()
-    val shade = if (dark) 0xFF1B1E23.toInt() else 0xFFA9B4C6.toInt()
-    val text = if (dark) 0xFFE9ECF2.toInt() else 0xFF343B48.toInt()
-    val dim = if (dark) 0xFF9AA3B2.toInt() else 0xFF7A8496.toInt()
+class Palette(val dark: Boolean, val glass: Boolean = false) {
+    val base = if (glass) (if (dark) 0xFF0B1024.toInt() else 0xFFE9EEFA.toInt()) else if (dark) 0xFF2A2E35.toInt() else 0xFFE4E8EE.toInt()
+    val light = if (glass) (if (dark) 0xFF6E80B0.toInt() else 0xFFFFFFFF.toInt()) else if (dark) 0xFF383D46.toInt() else 0xFFFFFFFF.toInt()
+    val shade = if (glass) (if (dark) 0xFF050818.toInt() else 0xFF8EA0C4.toInt()) else if (dark) 0xFF1B1E23.toInt() else 0xFFA9B4C6.toInt()
+    val text = if (glass) (if (dark) 0xFFF2F6FF.toInt() else 0xFF1B253D.toInt()) else if (dark) 0xFFE9ECF2.toInt() else 0xFF343B48.toInt()
+    val dim = if (glass) (if (dark) 0xFFB8C6E4.toInt() else 0xFF4F5F80.toInt()) else if (dark) 0xFF9AA3B2.toInt() else 0xFF7A8496.toInt()
     val warn = 0xFFE6A23C.toInt()
     val crit = 0xFFE5534B.toInt()
     fun accent(id: String) = when (id) {
@@ -88,21 +89,21 @@ object Renderer {
     // ---- entry points ------------------------------------------------------------------------------------
 
     /** Renders to a bitmap of exactly w×h px. The level is chosen to fit unless [forced]. */
-    fun render(s: UiState, wPx: Int, hPx: Int, density: Float, dark: Boolean, nowMs: Long, forced: Level? = null, rounded: Boolean = true): Bitmap {
+    fun render(s: UiState, wPx: Int, hPx: Int, density: Float, pal: Palette, nowMs: Long, forced: Level? = null, rounded: Boolean = true): Bitmap {
         val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val level = forced ?: pickLevel(s, hPx / density)
         val natural = naturalHeightDp(s, level)
         val scale = if (forced == null && natural > hPx / density) (hPx / density / natural).coerceIn(0.55f, 1f) else 1f
         c.scale(density * scale, density * scale)
-        draw(c, wPx / density / scale, hPx / density / scale, s, level, Palette(dark), nowMs, rounded)
+        draw(c, wPx / density / scale, hPx / density / scale, s, level, pal, nowMs, rounded)
         return bmp
     }
 
     /** Dashboard for the app: natural height for the given width. */
-    fun renderNatural(s: UiState, wPx: Int, density: Float, dark: Boolean, nowMs: Long, level: Level = Level.DETAIL): Bitmap {
+    fun renderNatural(s: UiState, wPx: Int, density: Float, pal: Palette, nowMs: Long, level: Level = Level.DETAIL): Bitmap {
         val h = (naturalHeightDp(s, level) * density).toInt().coerceAtLeast(1)
-        return render(s, wPx, h, density, dark, nowMs, level, rounded = false)
+        return render(s, wPx, h, density, pal, nowMs, level, rounded = false)
     }
 
     /** Centre of the refresh button in dp, for hit-testing. */
@@ -112,7 +113,11 @@ object Renderer {
 
     private fun draw(c: Canvas, w: Float, h: Float, s: UiState, level: Level, pal: Palette, now: Long, rounded: Boolean) {
         val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = pal.base }
-        if (rounded) c.drawRoundRect(0f, 0f, w, h, 28f, 28f, bg) else c.drawColor(pal.base)
+        if (pal.glass) {
+            if (rounded) { c.save(); c.clipPath(Path().apply { addRoundRect(RectF(0f, 0f, w, h), 28f, 28f, Path.Direction.CW) }) }
+            if (rounded) glassBackground(c, w, h, pal.dark) // in the app the window backdrop shows through
+            if (rounded) c.restore()
+        } else if (rounded) c.drawRoundRect(0f, 0f, w, h, 28f, 28f, bg) else c.drawColor(pal.base)
         val ps = visible(s)
         if (level == Level.MICRO) { micro(c, w, h, ps, s, pal, now); return }
         header(c, w, s, pal, now)
@@ -310,8 +315,37 @@ object Renderer {
 
     private fun dot(c: Canvas, x: Float, y: Float, color: Int) { c.drawCircle(x, y, 3f, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color }) }
 
-    /** Raised surface: light shadow top-left, dark shadow bottom-right. */
+    /** Deep night gradient with soft violet, cyan and pink glows (the "glass" theme backdrop). */
+    internal fun glassBackground(c: Canvas, w: Float, h: Float, dark: Boolean) {
+        val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        p.shader = LinearGradient(0f, 0f, w, h, if (dark) intArrayOf(0xFF0A0E22.toInt(), 0xFF171245.toInt(), 0xFF082035.toInt()) else intArrayOf(0xFFDDE7FB.toInt(), 0xFFEAE0FB.toInt(), 0xFFD6F0F6.toInt()), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w, h, p)
+        fun glow(cx: Float, cy: Float, rad: Float, rgb: Int, a: Int) {
+            p.shader = RadialGradient(cx, cy, rad, (a shl 24) or rgb, rgb, Shader.TileMode.CLAMP)
+            c.drawCircle(cx, cy, rad, p)
+        }
+        val m = maxOf(w, h)
+        glow(w * 0.15f, h * 0.08f, m * 0.55f, 0x8B5CF6, if (dark) 0x90 else 0x55)
+        glow(w * 0.9f, h * 0.95f, m * 0.55f, 0x22D3EE, if (dark) 0x70 else 0x50)
+        glow(w * 0.95f, h * 0.05f, m * 0.35f, 0xF472B6, 0x40)
+    }
+
+    /** Raised surface: light shadow top-left, dark shadow bottom-right (glass: frosted pane with a bright rim). */
     internal fun raised(c: Canvas, r: RectF, radius: Float, pal: Palette, offset: Float, blur: Float) {
+        if (pal.glass) {
+            val d = pal.dark
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (d) 0xE80B1024.toInt() else 0xEEF4F7FF.toInt(); setShadowLayer(blur * 1.6f, 0f, offset * 0.8f, if (d) 0x88000000.toInt() else 0x555B6FA8) }
+            c.drawRoundRect(r, radius, radius, p)
+            p.clearShadowLayer()
+            p.shader = LinearGradient(r.left, r.top, r.right, r.bottom, if (d) 0x38FFFFFF else 0x99FFFFFF.toInt(), if (d) 0x12C8DCFF else 0x33C8D7FF, Shader.TileMode.CLAMP)
+            c.drawRoundRect(r, radius, radius, p)
+            val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE; strokeWidth = 1.2f
+                shader = LinearGradient(r.left, r.top, r.right, r.bottom, if (d) intArrayOf(0xA0FFFFFF.toInt(), 0x1CA0BEFF, 0x55FFFFFF) else intArrayOf(0xFFFFFFFF.toInt(), 0x7096AADC, 0xC0FFFFFF.toInt()), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+            }
+            c.drawRoundRect(r, radius, radius, rim)
+            return
+        }
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = pal.base }
         p.setShadowLayer(blur, offset, offset, pal.shade); c.drawRoundRect(r, radius, radius, p)
         p.setShadowLayer(blur, -offset, -offset, pal.light); c.drawRoundRect(r, radius, radius, p)
@@ -320,6 +354,11 @@ object Renderer {
 
     /** Pressed-in surface: shadows are cast inwards from the edge. */
     internal fun inset(c: Canvas, r: RectF, radius: Float, pal: Palette, depth: Float = 2f) {
+        if (pal.glass) {
+            c.drawRoundRect(r, radius, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (pal.dark) 0x66000000 else 0x24284878 })
+            c.drawRoundRect(r, radius, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1f; color = if (pal.dark) 0x2EFFFFFF else 0x80FFFFFF.toInt() })
+            return
+        }
         val base = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = pal.base }
         c.drawRoundRect(r, radius, radius, base)
         c.save()

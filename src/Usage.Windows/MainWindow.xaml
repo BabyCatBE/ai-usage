@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Usage.Windows"
         Title="AI Usage" Width="440" Height="720" MinWidth="300" MinHeight="260"
-        Background="{DynamicResource BaseBrush}" UseLayoutRounding="True" TextOptions.TextFormattingMode="Ideal">
+        Background="{DynamicResource WindowBrush}" UseLayoutRounding="True" TextOptions.TextFormattingMode="Ideal">
     <Window.Resources>
         <DataTemplate x:Key="WindowRow" DataType="{x:Type local:WindowVM}">
             <StackPanel Margin="0,8,0,0">

@@ -35,7 +35,7 @@ The headless hub (`Usage.Hub`) collects usage and serves paired phones through t
    sudo systemctl enable --now usage-hub
    ```
 
-Other commands: `devices`, `revoke <id>`, `once` (prints one snapshot as JSON). Settings and paired devices live in `~/.local/share/UsageMonitor`. Use `USAGE_DATA_DIR` and `USAGE_RELAY_URL` to override the data folder and the relay.
+Other commands: `devices`, `rename <id> <new name>`, `revoke <id>`, `once` (prints one snapshot as JSON). Settings and paired devices live in `~/.local/share/UsageMonitor`. Use `USAGE_DATA_DIR` and `USAGE_RELAY_URL` to override the data folder and the relay.
 
 If both your PC and the VPS are paired with the same phone, the phone simply shows whichever answers (each pairing is its own room — pair twice).
 

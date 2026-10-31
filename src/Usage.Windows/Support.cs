@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -64,6 +64,7 @@ public static class Loc
 public static class Theme
 {
     public static bool Dark { get; private set; }
+    public static bool Glass { get; private set; }
     public static Color Base, Light, Shade, Text, Dim, Warn = Color.FromRgb(0xE6, 0xA2, 0x3C), Crit = Color.FromRgb(0xE5, 0x53, 0x4B);
     public static event Action? Changed;
 
@@ -83,29 +84,61 @@ public static class Theme
         catch { return false; }
     }
 
-    public static void Apply(string setting)
+    public static void Apply(Settings st)
     {
-        Dark = setting == "dark" || (setting != "light" && SystemDark());
-        Base = Dark ? Color.FromRgb(0x2A, 0x2E, 0x35) : Color.FromRgb(0xE4, 0xE8, 0xEE);
-        Light = Dark ? Color.FromRgb(0x38, 0x3D, 0x46) : Colors.White;
-        Shade = Dark ? Color.FromRgb(0x1B, 0x1E, 0x23) : Color.FromRgb(0xA9, 0xB4, 0xC6);
-        Text = Dark ? Color.FromRgb(0xE9, 0xEC, 0xF2) : Color.FromRgb(0x34, 0x3B, 0x48);
-        Dim = Dark ? Color.FromRgb(0x9A, 0xA3, 0xB2) : Color.FromRgb(0x7A, 0x84, 0x96);
+        if (st.Theme == "glass") { st.Theme = "auto"; st.Style = "glass"; } // older settings files
+        Glass = st.Style == "glass";
+        Dark = st.Theme == "dark" || (st.Theme != "light" && SystemDark());
+        if (Glass && Dark) { Base = Color.FromRgb(0x0B, 0x10, 0x24); Light = Color.FromRgb(0x6E, 0x80, 0xB0); Shade = Color.FromRgb(0x05, 0x08, 0x18); Text = Color.FromRgb(0xF2, 0xF6, 0xFF); Dim = Color.FromRgb(0xB8, 0xC6, 0xE4); }
+        else if (Glass) { Base = Color.FromRgb(0xE9, 0xEE, 0xFA); Light = Colors.White; Shade = Color.FromRgb(0x8E, 0xA0, 0xC4); Text = Color.FromRgb(0x1B, 0x25, 0x3D); Dim = Color.FromRgb(0x4F, 0x5F, 0x80); }
+        else if (Dark) { Base = Color.FromRgb(0x2A, 0x2E, 0x35); Light = Color.FromRgb(0x38, 0x3D, 0x46); Shade = Color.FromRgb(0x1B, 0x1E, 0x23); Text = Color.FromRgb(0xE9, 0xEC, 0xF2); Dim = Color.FromRgb(0x9A, 0xA3, 0xB2); }
+        else { Base = Color.FromRgb(0xE4, 0xE8, 0xEE); Light = Colors.White; Shade = Color.FromRgb(0xA9, 0xB4, 0xC6); Text = Color.FromRgb(0x34, 0x3B, 0x48); Dim = Color.FromRgb(0x7A, 0x84, 0x96); }
 
         var r = Application.Current.Resources;
         static SolidColorBrush B(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
         r["BaseBrush"] = B(Base); r["TextBrush"] = B(Text); r["DimBrush"] = B(Dim); r["LightBrush"] = B(Light); r["ShadeBrush"] = B(Shade);
         r["WarnBrush"] = B(Warn); r["CritBrush"] = B(Crit);
-        r["ShadowLight"] = Shadow(Light, -5, 14); r["ShadowDark"] = Shadow(Shade, 5, 14);
-        r["ShadowLightSm"] = Shadow(Light, -3, 8); r["ShadowDarkSm"] = Shadow(Shade, 3, 8);
+        if (Glass)
+        {
+            r["WindowBrush"] = GlassBackground(Dark);
+            // the panes stay mostly opaque so numbers never fight with whatever is behind the widget
+            r["CardBack"] = B(Dark ? Color.FromArgb(0xE8, 0x0B, 0x10, 0x24) : Color.FromArgb(0xEE, 0xF4, 0xF7, 0xFF));
+            r["CardFill"] = Frozen(new LinearGradientBrush(new GradientStopCollection { new(Dark ? Color.FromArgb(0x38, 255, 255, 255) : Color.FromArgb(0x99, 255, 255, 255), 0), new(Dark ? Color.FromArgb(0x12, 200, 220, 255) : Color.FromArgb(0x33, 200, 215, 255), 1) }, new Point(0, 0), new Point(1, 1)));
+            r["CardBorder"] = Frozen(new LinearGradientBrush(new GradientStopCollection { new(Color.FromArgb(Dark ? (byte)0xA0 : (byte)0xFF, 255, 255, 255), 0), new(Dark ? Color.FromArgb(0x1C, 160, 190, 255) : Color.FromArgb(0x70, 150, 170, 220), 0.5), new(Color.FromArgb(Dark ? (byte)0x55 : (byte)0xC0, 255, 255, 255), 1) }, new Point(0, 0), new Point(1, 1)));
+            r["ShadowLight"] = Shadow(Colors.Transparent, -1, 1); r["ShadowDark"] = Shadow(Dark ? Colors.Black : Color.FromRgb(0x5B, 0x6F, 0xA8), 4, 26);
+            r["ShadowLightSm"] = Shadow(Colors.Transparent, -1, 1); r["ShadowDarkSm"] = Shadow(Dark ? Colors.Black : Color.FromRgb(0x5B, 0x6F, 0xA8), 2, 12);
+        }
+        else
+        {
+            r["WindowBrush"] = r["BaseBrush"]; r["CardBack"] = r["BaseBrush"]; r["CardFill"] = r["BaseBrush"]; r["CardBorder"] = B(Colors.Transparent);
+            r["ShadowLight"] = Shadow(Light, -5, 14); r["ShadowDark"] = Shadow(Shade, 5, 14);
+            r["ShadowLightSm"] = Shadow(Light, -3, 8); r["ShadowDarkSm"] = Shadow(Shade, 3, 8);
+        }
         Changed?.Invoke();
+    }
+
+    static T Frozen<T>(T f) where T : Freezable { f.Freeze(); return f; }
+
+    /// <summary>Deep night gradient with soft violet and cyan glows behind the translucent cards.</summary>
+    static Brush GlassBackground(bool dark)
+    {
+        static RadialGradientBrush Glow(byte r, byte g, byte b, byte a) => new(Color.FromArgb(a, r, g, b), Color.FromArgb(0, r, g, b));
+        var bg = new LinearGradientBrush(new GradientStopCollection { new(dark ? Color.FromRgb(0x0A, 0x0E, 0x22) : Color.FromRgb(0xDD, 0xE7, 0xFB), 0), new(dark ? Color.FromRgb(0x17, 0x12, 0x45) : Color.FromRgb(0xEA, 0xE0, 0xFB), 0.55), new(dark ? Color.FromRgb(0x08, 0x20, 0x35) : Color.FromRgb(0xD6, 0xF0, 0xF6), 1) }, new Point(0, 0), new Point(1, 1));
+        var group = new DrawingGroup { ClipGeometry = new RectangleGeometry(new Rect(0, 0, 100, 100)) };
+        group.Children.Add(new GeometryDrawing(bg, null, new RectangleGeometry(new Rect(0, 0, 100, 100))));
+        group.Children.Add(new GeometryDrawing(Glow(0x8B, 0x5C, 0xF6, dark ? (byte)0x90 : (byte)0x55), null, new EllipseGeometry(new Point(18, 12), 55, 45)));
+        group.Children.Add(new GeometryDrawing(Glow(0x22, 0xD3, 0xEE, dark ? (byte)0x70 : (byte)0x50), null, new EllipseGeometry(new Point(88, 92), 55, 50)));
+        group.Children.Add(new GeometryDrawing(Glow(0xF4, 0x72, 0xB6, dark ? (byte)0x40 : (byte)0x40), null, new EllipseGeometry(new Point(92, 8), 35, 30)));
+        var brush = new DrawingBrush(group) { Stretch = Stretch.Fill, Viewbox = new Rect(0, 0, 100, 100), ViewboxUnits = BrushMappingMode.Absolute };
+        brush.Freeze();
+        return brush;
     }
 
     static DropShadowEffect Shadow(Color c, double offset, double blur)
     {
         var e = new DropShadowEffect
         {
-            Color = c, BlurRadius = blur, ShadowDepth = Math.Abs(offset) * 1.4142, Opacity = Dark ? 0.9 : 0.85,
+            Color = c, BlurRadius = blur, ShadowDepth = Math.Abs(offset) * 1.4142, Opacity = Glass ? 0.55 : Dark ? 0.9 : 0.85,
             Direction = offset < 0 ? 135 : 315, RenderingBias = RenderingBias.Performance,
         };
         e.Freeze();
