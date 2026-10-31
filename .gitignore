@@ -1,0 +1,17 @@
+bin/
+obj/
+.vs/
+*.user
+node_modules/
+.wrangler/
+.dev.vars
+.gradle/
+build/
+local.properties
+*.iml
+*.jks
+*.keystore
+*.log
+snapshot.json
+devices.json
+settings.json

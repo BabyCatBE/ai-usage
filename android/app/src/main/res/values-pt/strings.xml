@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Uso de IA</string>
+    <string name="widget_description">Limites de uso do ChatGPT, Claude e OpenCode</string>
+    <string name="refresh">Atualizar</string>
+</resources>

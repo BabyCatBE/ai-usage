@@ -1,0 +1,119 @@
+﻿<Application x:Class="Usage.Windows.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+
+        <!-- Raised surface: two stacked layers, one light shadow top-left and one dark shadow bottom-right. -->
+        <ControlTemplate x:Key="RaisedTemplate" TargetType="ContentControl">
+            <Grid>
+                <Border Background="{DynamicResource BaseBrush}" CornerRadius="20" Effect="{DynamicResource ShadowLight}"/>
+                <Border Background="{DynamicResource BaseBrush}" CornerRadius="20" Effect="{DynamicResource ShadowDark}"/>
+                <ContentPresenter Margin="{TemplateBinding Padding}"/>
+            </Grid>
+        </ControlTemplate>
+        <Style x:Key="Card" TargetType="ContentControl">
+            <Setter Property="Template" Value="{StaticResource RaisedTemplate}"/>
+            <Setter Property="Padding" Value="16,14"/>
+            <Setter Property="Margin" Value="10"/>
+            <Setter Property="Focusable" Value="False"/>
+        </Style>
+
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style x:Key="Dim" TargetType="TextBlock" BasedOn="{StaticResource Label}">
+            <Setter Property="Foreground" Value="{DynamicResource DimBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <!-- Soft button: raised, becomes sunken when pressed. -->
+        <Style x:Key="NeuButton" TargetType="Button">
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="16,9"/>
+            <Setter Property="Margin" Value="6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="root" Background="Transparent">
+                            <Border x:Name="light" Background="{DynamicResource BaseBrush}" CornerRadius="14" Effect="{DynamicResource ShadowLightSm}"/>
+                            <Border x:Name="dark" Background="{DynamicResource BaseBrush}" CornerRadius="14" Effect="{DynamicResource ShadowDarkSm}"/>
+                            <Border x:Name="pressed" CornerRadius="14" Opacity="0" Background="{DynamicResource ShadeBrush}"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="light" Property="Effect" Value="{x:Null}"/>
+                                <Setter TargetName="dark" Property="Effect" Value="{x:Null}"/>
+                                <Setter TargetName="pressed" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="root" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Round icon button for the header. -->
+        <Style x:Key="NeuRound" TargetType="Button" BasedOn="{StaticResource NeuButton}">
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <Ellipse x:Name="light" Fill="{DynamicResource BaseBrush}" Effect="{DynamicResource ShadowLightSm}"/>
+                            <Ellipse x:Name="dark" Fill="{DynamicResource BaseBrush}" Effect="{DynamicResource ShadowDarkSm}"/>
+                            <Ellipse x:Name="pressed" Opacity="0" Fill="{DynamicResource ShadeBrush}"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="light" Property="Effect" Value="{x:Null}"/>
+                                <Setter TargetName="dark" Property="Effect" Value="{x:Null}"/>
+                                <Setter TargetName="pressed" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="NeuText" TargetType="TextBox">
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border CornerRadius="12" Background="{DynamicResource ShadeBrush}" BorderBrush="{DynamicResource LightBrush}" BorderThickness="0,0,0,1">
+                            <Border CornerRadius="12" Background="{DynamicResource BaseBrush}" Opacity="0.72">
+                                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                            </Border>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="NeuCheck" TargetType="CheckBox">
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Margin" Value="0,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </Application.Resources>
+</Application>
