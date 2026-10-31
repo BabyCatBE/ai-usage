@@ -22,7 +22,9 @@ public partial class FloatingWidget : Window
 
     readonly AppState state;
     readonly DispatcherTimer collapseTimer = new() { Interval = TimeSpan.FromMilliseconds(380) };
-    bool expanded;
+    readonly DispatcherTimer detailTimer = new() { Interval = TimeSpan.FromMilliseconds(140) };
+    bool expanded, dirty;
+    ProviderVM? detailFor;
 
     public FloatingWidget(AppState state)
     {
@@ -36,8 +38,12 @@ public partial class FloatingWidget : Window
         SizeChanged += (_, _) => Reposition();
         Loaded += (_, _) => Fit();
         collapseTimer.Tick += (_, _) => { collapseTimer.Stop(); SetExpanded(false); };
+        detailTimer.Tick += (_, _) => { detailTimer.Stop(); Detail.IsOpen = false; detailFor = null; };
+        Detail.Placement = PlacementMode.Custom;
+        Detail.PopupAnimation = PopupAnimation.None;
+        Detail.CustomPopupPlacementCallback = PlaceDetail;
         Root.MouseEnter += (_, _) => { collapseTimer.Stop(); SetExpanded(true); };
-        Root.MouseLeave += (_, _) => collapseTimer.Start();
+        Root.MouseLeave += (_, _) => { collapseTimer.Start(); if (dirty) Dispatcher.BeginInvoke(Rebuild, DispatcherPriority.Background); };
         MouseDoubleClick += (_, _) => ((App)Application.Current).ShowMain();
         ContextMenu = BuildMenu();
         state.Updated += () => Dispatcher.BeginInvoke(Rebuild);
@@ -100,7 +106,7 @@ public partial class FloatingWidget : Window
         expanded = value;
         Collapsed.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
         Expanded.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
-        if (!value) Detail.IsOpen = false;
+        if (!value) { detailTimer.Stop(); Detail.IsOpen = false; detailFor = null; }
         var fade = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(160)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         (value ? (UIElement)Expanded : Collapsed).BeginAnimation(OpacityProperty, fade);
         Rebuild();
@@ -127,6 +133,10 @@ public partial class FloatingWidget : Window
 
         Dispatcher.BeginInvoke(Fit, DispatcherPriority.Loaded);
         if (!expanded) return;
+        // Rebuilding while the pointer is over the panel destroys the element under it, which fires
+        // MouseLeave/MouseEnter again and makes the details flicker: postpone until the pointer leaves.
+        if (Root.IsMouseOver && Expanded.Children.Count > 0) { dirty = true; return; }
+        dirty = false;
         Expanded.Children.Clear();
         Expanded.Children.Add(new TextBlock { Text = state.StatusLine(), Style = (Style)FindResource("Dim"), FontSize = 11, Margin = new Thickness(2, 0, 0, 6) });
         foreach (var p in ps) Expanded.Children.Add(ProviderBlock(p));
@@ -166,13 +176,31 @@ public partial class FloatingWidget : Window
             stack.Children.Add(g);
         }
         box.Child = stack;
-        box.MouseEnter += (_, _) => { box.Background = (Brush)FindResource("ShadeBrush"); box.Opacity = 1; ShowDetail(p, box); };
-        box.MouseLeave += (_, _) => { box.Background = Brushes.Transparent; Detail.IsOpen = false; };
+        box.MouseEnter += (_, _) => { detailTimer.Stop(); box.Background = (Brush)FindResource("ShadeBrush"); ShowDetail(p, box); };
+        box.MouseLeave += (_, _) => { box.Background = Brushes.Transparent; detailTimer.Start(); };
         return box;
+    }
+
+    FrameworkElement? detailTarget;
+
+    /// <summary>Beside the hovered row, clamped to the work area so it never slides over the widget itself.</summary>
+    CustomPopupPlacement[] PlaceDetail(Size popup, Size target, Point offset)
+    {
+        var wa = SystemParameters.WorkArea;
+        var src = PresentationSource.FromVisual(Surface);
+        var m = src?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
+        var surfTop = Surface.PointToScreen(new Point(0, 0)).Y / m.M22;
+        var rowTop = detailTarget is { IsLoaded: true } t ? t.PointToScreen(new Point(0, 0)).Y / m.M22 : surfTop;
+        var y = Math.Min(Math.Max(rowTop, wa.Top), Math.Max(wa.Top, wa.Bottom - popup.Height)) - surfTop;
+        var x = DockedRight ? -popup.Width : target.Width;
+        return [new CustomPopupPlacement(new Point(x, y), PopupPrimaryAxis.None)];
     }
 
     void ShowDetail(ProviderVM p, FrameworkElement target)
     {
+        if (ReferenceEquals(detailFor, p) && Detail.IsOpen) return;
+        detailFor = p;
+        detailTarget = target;
         var s = new StackPanel { Width = 300 };
         s.Children.Add(new TextBlock { Text = p.Name + (p.Plan is null ? "" : " · " + p.Plan), FontSize = 16, FontWeight = FontWeights.Bold, Style = (Style)FindResource("Label"), Margin = new Thickness(0, 0, 0, 4) });
         if (p.Notice is not null) s.Children.Add(new TextBlock { Text = p.Notice, Style = (Style)FindResource("Dim"), Foreground = (Brush)FindResource("WarnBrush"), TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.None, Margin = new Thickness(0, 0, 0, 4) });
@@ -214,12 +242,9 @@ public partial class FloatingWidget : Window
         s.Children.Add(new TextBlock { Text = p.UpdatedText, Style = (Style)FindResource("Dim"), FontSize = 10.5, Margin = new Thickness(0, 10, 0, 0) });
 
         var card = new ContentControl { Style = (Style)FindResource("Card"), Content = s, Margin = new Thickness(16) };
-        var right = DockedRight;
         Detail.Child = card;
         Detail.PlacementTarget = Surface;
-        Detail.Placement = right ? PlacementMode.Left : PlacementMode.Right;
-        Detail.VerticalOffset = 0;
-        Detail.IsOpen = false;
+        if (Detail.IsOpen) { Detail.IsOpen = false; }   // re-evaluate placement for the new row, without a visible gap (no fade)
         Detail.IsOpen = true;
     }
 }
