@@ -4,10 +4,10 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ShowInTaskbar="False"
         ResizeMode="NoResize" SizeToContent="WidthAndHeight" ShowActivated="False" Focusable="False"
         Topmost="True" UseLayoutRounding="True" Title="AI Usage widget">
-    <Grid x:Name="Root" Margin="16" Background="Transparent">
+    <Grid x:Name="Root" Margin="16,16,0,16" Background="Transparent">
         <ContentControl x:Name="Surface" Template="{StaticResource RaisedTemplate}" Focusable="False" Padding="0">
             <Grid>
-                <StackPanel x:Name="Collapsed" Orientation="Horizontal" Margin="12,8"/>
+                <StackPanel x:Name="Collapsed" Orientation="Vertical" Margin="7,10,6,10"/>
                 <StackPanel x:Name="Expanded" Margin="16,12" Visibility="Collapsed" Width="300"/>
             </Grid>
         </ContentControl>

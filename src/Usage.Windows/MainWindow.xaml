@@ -21,9 +21,9 @@
             <ContentControl Style="{StaticResource Card}">
                 <StackPanel>
                     <DockPanel LastChildFill="True" Margin="0,0,0,2">
-                        <Grid DockPanel.Dock="Left" Width="30" Height="30" Margin="0,0,10,0">
+                        <Grid DockPanel.Dock="Left" Width="30" Height="30" Margin="0,0,10,0" Visibility="{Binding ShowIcon, Converter={x:Static local:Conv.BoolToVisible}}">
                             <Ellipse Fill="{DynamicResource ShadeBrush}" Opacity="0.35"/>
-                            <Ellipse Fill="{Binding AccentBrush}" Width="10" Height="10"/>
+                            <local:ProviderIcon IconId="{Binding IconId}" Accent="{Binding Accent}" Width="19" Height="19" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                         
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">

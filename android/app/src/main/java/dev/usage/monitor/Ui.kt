@@ -103,3 +103,23 @@ class DashboardView @JvmOverloads constructor(context: Context, attrs: Attribute
 
     override fun performClick(): Boolean = super.performClick()
 }
+
+/** One selectable glyph: raised when idle, pressed-in with an accent ring when chosen. */
+class IconChoice(context: Context, private val pal: Palette, private val iconId: String, private val accent: Int, private val selected: Boolean, private val caption: String, onPick: () -> Unit) : View(context) {
+    private val d = context.resources.displayMetrics.density
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 10f * d; textAlign = Paint.Align.CENTER; color = if (selected) pal.text else pal.dim; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) }
+
+    init {
+        background = Neu.surface(context, pal, 22f, !selected, 12f)
+        isClickable = true
+        contentDescription = caption
+        setOnClickListener { onPick() }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val cx = width / 2f; val cy = height * 0.42f
+        Icons.draw(canvas, iconId, cx, cy, 14f * d, if (selected) accent else pal.dim)
+        canvas.drawText(caption, cx, height - 14f * d, textPaint)
+    }
+}

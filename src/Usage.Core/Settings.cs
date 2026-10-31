@@ -27,11 +27,13 @@ public sealed class Settings
     public string Language { get; set; } = "auto";   // auto | pt | en
     public string Theme { get; set; } = "auto";      // auto | light | dark
     public string RelayUrl { get; set; } = Defaults.Relay;
-    public string WidgetCorner { get; set; } = "TopRight"; // TopLeft | TopRight | BottomLeft | BottomRight
+    public string WidgetEdge { get; set; } = "Right";   // Right | Left: docked to the middle of that screen edge
     public bool WidgetEnabled { get; set; } = true;
     public bool WidgetAlwaysOnTop { get; set; } = true;
     public bool HideMissingProviders { get; set; } = true;
     public bool StartWithWindows { get; set; } = true;
+    public bool ShowIcons { get; set; } = true;
+    public Dictionary<string, string> Icons { get; set; } = [];   // provider id -> icon id
 
     static string FilePath => Path.Combine(AppPaths.Data, "settings.json");
 

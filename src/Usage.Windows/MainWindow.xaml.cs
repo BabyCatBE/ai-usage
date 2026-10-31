@@ -198,9 +198,36 @@ public partial class MainWindow : Window
         Choice(["auto", "pt", "en"], [Loc.T("Automático", "Automatic"), "Português", "English"], st.Language, v => st.Language = v);
         Caption(Loc.T("Tema", "Theme"));
         Choice(["auto", "light", "dark"], [Loc.T("Automático", "Automatic"), Loc.T("Claro", "Light"), Loc.T("Escuro", "Dark")], st.Theme, v => st.Theme = v);
+        Caption(Loc.T("Ícones dos provedores", "Provider icons"));
+        void IconCheck()
+        {
+            var c = new CheckBox { Content = Loc.T("Mostrar ícones", "Show icons"), IsChecked = st.ShowIcons, Style = (Style)FindResource("NeuCheck") };
+            c.Click += (_, _) => { st.ShowIcons = c.IsChecked == true; Apply(false); BuildSettings(); };
+            SettingsBody.Children.Add(c);
+        }
+        IconCheck();
+        if (st.ShowIcons)
+            foreach (var (pid, pname) in IconCatalog.Providers)
+            {
+                SettingsBody.Children.Add(new TextBlock { Text = pname, Style = (Style)FindResource("Dim"), Margin = new Thickness(0, 6, 0, 0) });
+                var wrap = new WrapPanel();
+                var current = IconCatalog.Resolve(pid, st.Icons);
+                foreach (var opt in IconCatalog.Options(pid))
+                {
+                    var sel = opt.Id == current;
+                    var content = new StackPanel { Orientation = Orientation.Horizontal };
+                    content.Children.Add(new ProviderIcon { IconId = opt.Id, Accent = sel ? Theme.Accent(pid) : Theme.Dim, Width = 22, Height = 22, Margin = new Thickness(0, 0, 6, 0) });
+                    content.Children.Add(new TextBlock { Text = opt.Label, VerticalAlignment = VerticalAlignment.Center, FontSize = 12, Foreground = sel ? new SolidColorBrush(Theme.Accent(pid)) : (Brush)FindResource("TextBrush") });
+                    var b = new Button { Content = content, Style = (Style)FindResource("NeuButton"), Padding = new Thickness(10, 6, 12, 6), Margin = new Thickness(0, 4, 6, 4) };
+                    var oid = opt.Id; var prov = pid;
+                    b.Click += (_, _) => { st.Icons[prov] = oid; Apply(false); BuildSettings(); };
+                    wrap.Children.Add(b);
+                }
+                SettingsBody.Children.Add(wrap);
+            }
         Caption(Loc.T("Widget flutuante", "Floating widget"));
         Check(Loc.T("Mostrar o widget no canto da tela", "Show the widget on a screen corner"), st.WidgetEnabled, v => st.WidgetEnabled = v);
-        Choice(["TopLeft", "TopRight", "BottomLeft", "BottomRight"], [Loc.T("Sup. esquerdo", "Top left"), Loc.T("Sup. direito", "Top right"), Loc.T("Inf. esquerdo", "Bottom left"), Loc.T("Inf. direito", "Bottom right")], st.WidgetCorner, v => st.WidgetCorner = v);
+        Choice(["Right", "Left"], [Loc.T("Borda direita", "Right edge"), Loc.T("Borda esquerda", "Left edge")], st.WidgetEdge, v => st.WidgetEdge = v);
         Check(Loc.T("Sempre sobre outras janelas", "Always on top"), st.WidgetAlwaysOnTop, v => st.WidgetAlwaysOnTop = v);
         Caption(Loc.T("Geral", "General"));
         Check(Loc.T("Ocultar provedores não instalados", "Hide providers that are not installed"), st.HideMissingProviders, v => st.HideMissingProviders = v);
@@ -221,9 +248,10 @@ public partial class MainWindow : Window
         });
     }
 
-    void Apply()
+    void Apply(bool full = true)
     {
         state.Settings.Save();
+        if (!full) { state.Rebuild(); return; }
         Autostart.Set(state.Settings.StartWithWindows);
         state.Restart();
         Localize();

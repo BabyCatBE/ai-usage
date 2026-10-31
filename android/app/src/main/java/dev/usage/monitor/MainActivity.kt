@@ -90,7 +90,7 @@ class MainActivity : Activity() {
         ).also { it.start() }
     }
 
-    private fun currentState() = UiState(store.snapshot, store.pairing != null, store.hostOnline, store.receivedAtMs, System.currentTimeMillis() < busyUntil)
+    private fun currentState() = UiState(store.snapshot, store.pairing != null, store.hostOnline, store.receivedAtMs, System.currentTimeMillis() < busyUntil, store.icons, store.showIcons)
 
     private fun refreshState() { if (::dashboard.isInitialized) { dashboard.state = currentState() } }
 
@@ -119,6 +119,7 @@ class MainActivity : Activity() {
         root.addView(dashboard, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val pairing = store.pairing
+        appearancePanel()
         if (pairing == null) pairPanel() else connectedPanel(pairing)
         setContentView(scroll)
     }
@@ -140,6 +141,35 @@ class MainActivity : Activity() {
         v.forEachIndexed { i, view -> r.addView(view, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = dpi(4f) }) }
         parent.addView(r, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dpi(4f) })
     }
+
+    // ---- appearance: icons on/off and which glyph each provider uses ---------------------------------------
+
+    private fun appearancePanel() {
+        val p = panel()
+        fun fill() {
+            p.removeAllViews()
+            p.addView(label(if (Fmt.pt) "Aparência" else "Appearance", 17f, pal.text, true))
+            val on = store.showIcons
+            row(p, Neu.button(this, pal, (if (Fmt.pt) "Ícones: " else "Icons: ") + (if (on) (if (Fmt.pt) "ligados" else "on") else (if (Fmt.pt) "desligados" else "off")), if (on) pal.accent("codex") else pal.dim) {
+                store.showIcons = !store.showIcons; applyAppearance(); fill()
+            })
+            if (on) for ((id, name) in Icons.providers) {
+                p.addView(label(name, 13f, pal.dim).apply { setPadding(dpi(4f), dpi(8f), 0, dpi(2f)) })
+                val strip = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER }
+                val inner = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                for (opt in Icons.options(id)) {
+                    inner.addView(IconChoice(this, pal, opt.id, pal.accent(id), store.icon(id) == opt.id, opt.label) {
+                        store.setIcon(id, opt.id); applyAppearance(); fill()
+                    }, LinearLayout.LayoutParams(dpi(72f), dpi(84f)))
+                }
+                strip.addView(inner)
+                p.addView(strip, LinearLayout.LayoutParams(-1, -2))
+            }
+        }
+        fill()
+    }
+
+    private fun applyAppearance() { refreshState(); UsageWidget.updateAll(this) }
 
     private fun pairPanel() {
         val p = panel()

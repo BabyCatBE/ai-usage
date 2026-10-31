@@ -16,6 +16,8 @@ data class UiState(
     val hostOnline: Boolean?,   // null = unknown
     val receivedAtMs: Long,
     val busy: Boolean,
+    val icons: Map<String, String> = emptyMap(),
+    val showIcons: Boolean = true,
 )
 
 enum class Level { DETAIL, NORMAL, COMPACT, MICRO }
@@ -119,7 +121,7 @@ object Renderer {
         if (ps.isEmpty()) { emptyCard(c, w, y, s, pal); return }
         for (p in ps) {
             val ch = cardHeight(p, level)
-            card(c, RectF(PAD, y, w - PAD, y + ch), p, level, pal, now)
+            card(c, RectF(PAD, y, w - PAD, y + ch), p, level, pal, now, s.icons[p.id] ?: Icons.default(p.id), s.showIcons)
             y += ch + GAP + extra
         }
     }
@@ -136,8 +138,8 @@ object Renderer {
         for (p in ps) {
             val accent = pal.accent(p.id)
             val cyRow = y + rowH / 2f
-            c.drawCircle(PAD + 6, cyRow, 4.5f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent })
-            text(c, p.name, PAD + 18, cyRow + 4.5f, 13f, bold, pal.text)
+            if (s.showIcons) Icons.draw(c, s.icons[p.id] ?: Icons.default(p.id), PAD + 9, cyRow, 9f, accent)
+            text(c, p.name, if (s.showIcons) PAD + 24 else PAD + 2, cyRow + 4.5f, 13f, bold, pal.text)
             val ws = p.windows.filter { it.percent != null }
             if (ws.isEmpty()) text(c, Fmt.error(p.errorCode), right, cyRow + 4f, 11f, regular, pal.dim, right = true, maxWidth = right - PAD - 90)
             else {
@@ -188,7 +190,7 @@ object Renderer {
         if (!s.paired) text(c, Fmt.pairHelp, r.centerX(), r.top + 64, 11f, regular, pal.dim, center = true, maxWidth = r.width() - 28, maxLines = 2)
     }
 
-    private fun card(c: Canvas, r: RectF, p: Provider, level: Level, pal: Palette, now: Long) {
+    private fun card(c: Canvas, r: RectF, p: Provider, level: Level, pal: Palette, now: Long, icon: String, showIcon: Boolean) {
         raised(c, r, 20f, pal, 5f, 11f)
         val accent = pal.accent(p.id)
         val inner = RectF(r.left + 16, r.top, r.right - 16, r.bottom)
@@ -196,10 +198,11 @@ object Renderer {
         var y = r.top + topPad
         // header: badge + name + plan + status
         val bh = if (level == Level.DETAIL) 34f else if (level == Level.NORMAL) 30f else 24f
-        badge(c, p.id, inner.left + 13, y + bh / 2 - 2, 12f, accent, pal)
+        val off = if (showIcon) 32f else 2f
+        if (showIcon) badge(c, icon, inner.left + 13, y + bh / 2 - 2, 12f, accent, pal)
         val nameSize = if (level == Level.COMPACT) 14f else 15.5f
-        text(c, p.name, inner.left + 32, y + bh / 2 + 3, nameSize, bold, pal.text)
-        var nx = inner.left + 32 + measure(p.name, nameSize, bold) + 8
+        text(c, p.name, inner.left + off, y + bh / 2 + 3, nameSize, bold, pal.text)
+        var nx = inner.left + off + measure(p.name, nameSize, bold) + 8
         if (p.plan != null) {
             val pw = measure(p.plan, 10.5f, medium) + 14
             inset(c, RectF(nx, y + bh / 2 - 10, nx + pw, y + bh / 2 + 6), 8f, pal)
@@ -352,18 +355,8 @@ object Renderer {
         return (color and 0xFF000000.toInt()) or (ch((color shr 16) and 255) shl 16) or (ch((color shr 8) and 255) shl 8) or ch(color and 255)
     }
 
-    private fun badge(c: Canvas, id: String, cx: Float, cy: Float, r: Float, color: Int, pal: Palette) {
+    private fun badge(c: Canvas, iconId: String, cx: Float, cy: Float, r: Float, color: Int, pal: Palette) {
         inset(c, RectF(cx - r, cy - r, cx + r, cy + r), r, pal, 2f)
-        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; style = Paint.Style.STROKE; strokeWidth = 2f; strokeCap = Paint.Cap.ROUND }
-        when (id) {
-            "claude" -> for (i in 0 until 4) { // asterisk
-                val a = Math.toRadians(i * 45.0 + 0)
-                c.drawLine(cx - (r * 0.55f * Math.cos(a)).toFloat(), cy - (r * 0.55f * Math.sin(a)).toFloat(), cx + (r * 0.55f * Math.cos(a)).toFloat(), cy + (r * 0.55f * Math.sin(a)).toFloat(), p)
-            }
-            "opencode" -> c.drawPath(Path().apply { moveTo(cx, cy - r * 0.55f); lineTo(cx + r * 0.5f, cy); lineTo(cx, cy + r * 0.55f); lineTo(cx - r * 0.5f, cy); close() }, p)
-            else -> { // codex / chatgpt: ring with a notch
-                c.drawArc(RectF(cx - r * 0.5f, cy - r * 0.5f, cx + r * 0.5f, cy + r * 0.5f), -30f, 300f, false, p)
-            }
-        }
+        Icons.draw(c, iconId, cx, cy, r, color)
     }
 }

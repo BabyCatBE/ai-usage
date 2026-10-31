@@ -57,23 +57,26 @@ public partial class FloatingWidget : Window
         return m;
     }
 
+    bool DockedRight => state.Settings.WidgetEdge != "Left";
+
     public void ApplySettings()
     {
         Topmost = state.Settings.WidgetAlwaysOnTop;
         ContextMenu = BuildMenu();
+        Surface.Template = (ControlTemplate)FindResource(DockedRight ? "DockRightTemplate" : "DockLeftTemplate");
+        Root.Margin = DockedRight ? new Thickness(16, 16, 0, 16) : new Thickness(0, 16, 16, 16);
         Reposition();
     }
 
     // ---- layout --------------------------------------------------------------------------------------------
 
+    /// <summary>Flush against the screen edge, vertically centred: it never covers the title-bar buttons.</summary>
     void Reposition()
     {
         if (ActualWidth <= 0) return;
         var wa = SystemParameters.WorkArea;
-        const double m = 6;
-        var c = state.Settings.WidgetCorner;
-        Left = c.EndsWith("Right") ? wa.Right - ActualWidth - m : wa.Left + m;
-        Top = c.StartsWith("Top") ? wa.Top + m : wa.Bottom - ActualHeight - m;
+        Left = DockedRight ? wa.Right - ActualWidth : wa.Left;
+        Top = wa.Top + (wa.Height - ActualHeight) / 2;
     }
 
     void SetExpanded(bool value)
@@ -97,14 +100,12 @@ public partial class FloatingWidget : Window
         if (ps.Count == 0) Collapsed.Children.Add(new TextBlock { Text = state.Service.IsRefreshing ? "…" : "AI", Style = (Style)FindResource("Label"), FontWeight = FontWeights.Bold, Margin = new Thickness(8, 6, 8, 6) });
         foreach (var p in ps)
         {
-            var w = p.Windows.FirstOrDefault();
-            var cell = new Grid { Width = 40, Height = 40, Margin = new Thickness(2, 0, 2, 0), ToolTip = null };
-            cell.Children.Add(new Ring { Value = w?.Percent ?? 0, HasValue = w is not null, Accent = w?.Accent ?? p.Accent });
-            cell.Children.Add(new TextBlock
-            {
-                Text = w is null ? "–" : $"{w.Percent:0}", FontSize = 11.5, FontWeight = FontWeights.Bold, Style = (Style)FindResource("Label"),
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.None,
-            });
+            var first = p.Windows.FirstOrDefault();
+            double? worst = p.Windows.Count == 0 ? null : p.Windows.Max(w => w.Percent);
+            var cell = new Grid { Width = 24, Height = 24, Margin = new Thickness(0, 3, 0, 3) };
+            cell.Children.Add(new Ring { Value = first?.Percent ?? 0, HasValue = first is not null, Accent = Theme.Level(worst, p.Accent) });
+            if (p.ShowIcon) cell.Children.Add(new ProviderIcon { IconId = p.IconId, Accent = p.Accent, Width = 12, Height = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+            else cell.Children.Add(new System.Windows.Shapes.Ellipse { Width = 6, Height = 6, Fill = p.AccentBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
             Collapsed.Children.Add(cell);
         }
 
@@ -120,7 +121,7 @@ public partial class FloatingWidget : Window
         var box = new Border { Padding = new Thickness(6, 6, 6, 4), Margin = new Thickness(0, 2, 0, 2), CornerRadius = new CornerRadius(12), Background = Brushes.Transparent };
         var stack = new StackPanel();
         var head = new DockPanel { LastChildFill = true };
-        head.Children.Add(new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Fill = p.AccentBrush, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
+        if (p.ShowIcon) head.Children.Add(new ProviderIcon { IconId = p.IconId, Accent = p.Accent, Width = 18, Height = 18, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
         if (p.Plan is not null)
         {
             var chip = new TextBlock { Text = p.Plan, Style = (Style)FindResource("Dim"), FontSize = 10.5, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -195,7 +196,7 @@ public partial class FloatingWidget : Window
         s.Children.Add(new TextBlock { Text = p.UpdatedText, Style = (Style)FindResource("Dim"), FontSize = 10.5, Margin = new Thickness(0, 10, 0, 0) });
 
         var card = new ContentControl { Style = (Style)FindResource("Card"), Content = s, Margin = new Thickness(16) };
-        var right = state.Settings.WidgetCorner.EndsWith("Right");
+        var right = DockedRight;
         Detail.Child = card;
         Detail.PlacementTarget = Surface;
         Detail.Placement = right ? PlacementMode.Left : PlacementMode.Right;

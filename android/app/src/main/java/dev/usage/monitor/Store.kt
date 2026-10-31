@@ -27,5 +27,13 @@ class Store(context: Context) {
         get() = prefs.getBoolean("busy", false) && System.currentTimeMillis() - prefs.getLong("busyAt", 0) < 90_000
         set(v) { prefs.edit().putBoolean("busy", v).putLong("busyAt", System.currentTimeMillis()).apply() }
 
+    var showIcons: Boolean
+        get() = prefs.getBoolean("showIcons", true)
+        set(v) { prefs.edit().putBoolean("showIcons", v).apply() }
+
+    fun icon(provider: String): String = prefs.getString("icon_$provider", null)?.takeIf { id -> Icons.options(provider).any { it.id == id } } ?: Icons.default(provider)
+    fun setIcon(provider: String, id: String) { prefs.edit().putString("icon_$provider", id).apply() }
+    val icons: Map<String, String> get() = Icons.providers.associate { it.first to icon(it.first) }
+
     fun save(raw: String) { prefs.edit().putString("snapshot", raw).putLong("receivedAt", System.currentTimeMillis()).apply() }
 }

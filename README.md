@@ -5,7 +5,8 @@
 **Português:** [role para a seção em português](#português)
 
 - **Soft neumorphism** look, light and dark, follows the system theme.
-- **Windows floating widget** pinned to a screen corner: hover to expand every window of every provider, hover a provider for a detailed report (all windows, elapsed time, models, 24 h history).
+- **Windows floating widget** docked to the middle of the right (or left) screen edge as a thin retracted tab, so it never covers window buttons: hover to expand every window of every provider, hover a provider for a detailed report (all windows, elapsed time, models, 24 h history).
+- **Provider icons** (ChatGPT/Codex, Claude/Claude Code mascot, OpenCode or a Go-plan model letter) with an on/off switch, on the widgets and in both apps.
 - **Windows app** that reflows from one to three columns, made to live in a split-screen on a second monitor.
 - **Android app + widget** that works at home *and* away, with no VPN, no database and no account.
 - **Private by design**: it never reads credential files. It asks the official CLIs (`codex`, `claude`, `opencode`) for the numbers, and nothing readable ever leaves your PC (the phone link is end-to-end encrypted).
@@ -43,7 +44,7 @@ The PC opens an **outbound** WebSocket to a tiny **relay** (works behind routers
 |---|---|---|
 | ChatGPT / Codex | `codex app-server` rate limits | 5 h + weekly, plan, credits |
 | Claude | `claude` `get_usage` control request | 5 h + weekly, per-product breakdown, extra usage |
-| OpenCode Go | `opencode` local API `usage/limits` | 5 h + weekly + monthly, spend per model. Requires `opencode auth login` with the **OpenCode Console** account |
+| OpenCode Go | `opencode` local API `usage/limits` ([how](docs/opencode.md)) | 5 h + weekly + monthly. Requires `opencode auth login` with the **OpenCode Console** account |
 
 Adding a provider = one class implementing `IUsageProvider` (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
@@ -51,7 +52,8 @@ Adding a provider = one class implementing `IUsageProvider` (see [CONTRIBUTING.m
 
 - The Android widget refreshes every ~15 min (Android's minimum) and instantly when you tap ↻ while the PC is on.
 - With the PC off and no VPS hub, the widget shows the last known data and says so.
-- Windows: the floating widget currently anchors to the primary monitor.
+- Windows: the floating widget docks to the primary monitor.
+- OpenCode exposes no per-model percentages for the Go plan today; per-model spend appears only when budgets exist.
 
 ## License
 

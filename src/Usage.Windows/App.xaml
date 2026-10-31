@@ -13,6 +13,21 @@
                 <ContentPresenter Margin="{TemplateBinding Padding}"/>
             </Grid>
         </ControlTemplate>
+        <!-- Docked variants: only the corners facing the screen interior are rounded. -->
+        <ControlTemplate x:Key="DockRightTemplate" TargetType="ContentControl">
+            <Grid>
+                <Border Background="{DynamicResource BaseBrush}" CornerRadius="20,0,0,20" Effect="{DynamicResource ShadowLight}"/>
+                <Border Background="{DynamicResource BaseBrush}" CornerRadius="20,0,0,20" Effect="{DynamicResource ShadowDark}"/>
+                <ContentPresenter Margin="{TemplateBinding Padding}"/>
+            </Grid>
+        </ControlTemplate>
+        <ControlTemplate x:Key="DockLeftTemplate" TargetType="ContentControl">
+            <Grid>
+                <Border Background="{DynamicResource BaseBrush}" CornerRadius="0,20,20,0" Effect="{DynamicResource ShadowLight}"/>
+                <Border Background="{DynamicResource BaseBrush}" CornerRadius="0,20,20,0" Effect="{DynamicResource ShadowDark}"/>
+                <ContentPresenter Margin="{TemplateBinding Padding}"/>
+            </Grid>
+        </ControlTemplate>
         <Style x:Key="Card" TargetType="ContentControl">
             <Setter Property="Template" Value="{StaticResource RaisedTemplate}"/>
             <Setter Property="Padding" Value="16,14"/>

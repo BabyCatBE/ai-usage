@@ -40,7 +40,7 @@ class UsageWidget : AppWidgetProvider() {
             manager.getAppWidgetIds(ComponentName(context, UsageWidget::class.java)).forEach { update(context, manager, it) }
         }
 
-        fun stateOf(store: Store) = UiState(store.snapshot, store.pairing != null, store.hostOnline, store.receivedAtMs, store.busy)
+        fun stateOf(store: Store) = UiState(store.snapshot, store.pairing != null, store.hostOnline, store.receivedAtMs, store.busy, store.icons, store.showIcons)
 
         fun update(context: Context, manager: AppWidgetManager, id: Int) {
             val opts = manager.getAppWidgetOptions(id)

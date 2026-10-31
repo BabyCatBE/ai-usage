@@ -15,7 +15,8 @@ public sealed record ModelVM(string Name, string Value);
 
 public sealed record ProviderVM(
     string Id, string Name, string? Plan, Color Accent, string? Notice, bool Stale, string UpdatedText,
-    IReadOnlyList<WindowVM> Windows, IReadOnlyList<ModelVM> Models, IReadOnlyList<Detail> Details, IReadOnlyList<HistoryPoint> History)
+    IReadOnlyList<WindowVM> Windows, IReadOnlyList<ModelVM> Models, IReadOnlyList<Detail> Details, IReadOnlyList<HistoryPoint> History,
+    string IconId = "generic", bool ShowIcon = true)
 {
     public Brush AccentBrush { get { var b = new SolidColorBrush(Accent); b.Freeze(); return b; } }
     public bool HasWindows => Windows.Count > 0;
@@ -109,7 +110,7 @@ public sealed class AppState : IDisposable
         return new ProviderVM(p.Id, p.Name, p.Plan, accent, notice, p.Status == ProviderStatus.Stale,
             p.FetchedAt is { } t ? Loc.T("Lido ", "Read ") + t.ToLocalTime().ToString("HH:mm") + " · " + Loc.Age(t, now) : "",
             windows, models, p.Details.Select(d => new Detail(d.Label == "credits" ? Loc.T("Créditos", "Credits") : d.Label == "extra_usage" ? Loc.T("Uso extra", "Extra usage") : d.Label, d.Value)).ToList(),
-            first is null ? [] : Service.History(p.Id, first.Id));
+            first is null ? [] : Service.History(p.Id, first.Id), IconCatalog.Resolve(p.Id, Settings.Icons), Settings.ShowIcons);
     }
 
     public string StatusLine()
