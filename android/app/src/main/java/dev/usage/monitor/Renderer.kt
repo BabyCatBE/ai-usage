@@ -24,11 +24,12 @@ data class UiState(
 enum class Level { DETAIL, NORMAL, COMPACT, MICRO }
 
 class Palette(val dark: Boolean, val glass: Boolean = false, val variant: CyberVariant? = null) {
-    val cyber = variant != null
-    /** Liquid glass and the neon look share the translucent drawing path. */
-    val frosted = glass || cyber
+    val soft = variant?.soft == true
+    val cyber = variant != null && !soft
+    /** Liquid glass, the neon look and the soft look share the backdrop drawing path. */
+    val frosted = glass || variant != null
     val base = variant?.base ?: if (glass) (if (dark) 0xFF0B1024.toInt() else 0xFFE9EEFA.toInt()) else if (dark) 0xFF2A2E35.toInt() else 0xFFE4E8EE.toInt()
-    val light = variant?.primary ?: if (glass) (if (dark) 0xFF6E80B0.toInt() else 0xFFFFFFFF.toInt()) else if (dark) 0xFF383D46.toInt() else 0xFFFFFFFF.toInt()
+    val light = if (soft) mixWhite(variant!!.base, if (variant.dark) 0.06f else 0.55f) else variant?.primary ?: if (glass) (if (dark) 0xFF6E80B0.toInt() else 0xFFFFFFFF.toInt()) else if (dark) 0xFF383D46.toInt() else 0xFFFFFFFF.toInt()
     val shade = variant?.ink ?: if (glass) (if (dark) 0xFF050818.toInt() else 0xFF8EA0C4.toInt()) else if (dark) 0xFF1B1E23.toInt() else 0xFFA9B4C6.toInt()
     val text = variant?.text ?: if (glass) (if (dark) 0xFFF2F6FF.toInt() else 0xFF1B253D.toInt()) else if (dark) 0xFFE9ECF2.toInt() else 0xFF343B48.toInt()
     val dim = variant?.dim ?: if (glass) (if (dark) 0xFFB8C6E4.toInt() else 0xFF4F5F80.toInt()) else if (dark) 0xFF9AA3B2.toInt() else 0xFF7A8496.toInt()
@@ -44,6 +45,10 @@ class Palette(val dark: Boolean, val glass: Boolean = false, val variant: CyberV
         "claude" -> 0xFFE0875A.toInt()
         "opencode" -> 0xFF9B87F5.toInt()
         else -> 0xFF5AA9E6.toInt()
+    }
+    private fun mixWhite(c: Int, f: Float): Int {
+        fun ch(v: Int): Int = (v + (255 - v) * f).toInt().coerceIn(0, 255)
+        return 0xFF000000.toInt() or (ch(c shr 16 and 255) shl 16) or (ch(c shr 8 and 255) shl 8) or ch(c and 255)
     }
     fun level(percent: Double?, accent: Int) = when {
         percent == null -> accent
@@ -326,7 +331,14 @@ object Renderer {
     private fun a(color: Int, alpha: Int) = (alpha shl 24) or (color and 0x00FFFFFF)
     private fun mix(x: Int, y: Int): Int = ((((x shr 16 and 255) + (y shr 16 and 255)) / 2) shl 16) or ((((x shr 8 and 255) + (y shr 8 and 255)) / 2) shl 8) or (((x and 255) + (y and 255)) / 2) or 0xFF000000.toInt()
 
-    internal fun background(c: Canvas, w: Float, h: Float, pal: Palette) { val v = pal.variant; if (v != null) cyberBackground(c, w, h, v) else glassBackground(c, w, h, pal.dark) }
+    internal fun background(c: Canvas, w: Float, h: Float, pal: Palette) { val v = pal.variant; if (v != null && v.soft) softBackground(c, w, h, v) else if (v != null) cyberBackground(c, w, h, v) else glassBackground(c, w, h, pal.dark) }
+
+    /** Soft theme backdrop: a barely-there three-stop gradient, nothing else. */
+    internal fun softBackground(c: Canvas, w: Float, h: Float, v: CyberVariant) {
+        val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        p.shader = LinearGradient(0f, 0f, w, h, intArrayOf(v.bgA, v.bgB, v.bgC), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, w, h, p)
+    }
 
     /** Night-city backdrop of the cyberpunk theme: ink-violet gradient, faint cyan grid, magenta and cyan glows. */
     internal fun cyberBackground(c: Canvas, w: Float, h: Float, v: CyberVariant) {
@@ -364,6 +376,13 @@ object Renderer {
     /** Raised surface: light shadow top-left, dark shadow bottom-right (glass: frosted pane with a bright rim). */
     internal fun raised(c: Canvas, r: RectF, radius: Float, pal: Palette, offset: Float, blur: Float) {
         pal.variant?.let { v ->
+            if (v.soft) {   // flat surface, hairline border, no shadow or glow
+                val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = pal.light }
+                c.drawRoundRect(r, radius * 0.8f, radius * 0.8f, fill)
+                val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1f; color = a(v.dim, if (v.dark) 0x30 else 0x38) }
+                c.drawRoundRect(r, radius * 0.8f, radius * 0.8f, rim)
+                return
+            }
             val rad = radius * 0.4f
             val fa = if (v.dark) 0x26 else 0x1C
             val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = a(v.base, if (v.dark) 0xF0 else 0xEC); setShadowLayer(blur * 1.2f, 0f, 0f, a(v.primary, 0x66)) }
@@ -401,6 +420,7 @@ object Renderer {
     /** Pressed-in surface: shadows are cast inwards from the edge. */
     internal fun inset(c: Canvas, r: RectF, radius: Float, pal: Palette, depth: Float = 2f) {
         pal.variant?.let { v ->
+            if (v.soft) { c.drawRoundRect(r, radius, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = a(v.ink, if (v.dark) 0xB0 else 0xA0) }); return }
             val rad = minOf(radius, 4f)
             c.drawRoundRect(r, rad, rad, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = a(v.ink, 0xD7) })
             c.drawRoundRect(r, rad, rad, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1f; color = a(v.primary, 0x50) })
@@ -434,7 +454,7 @@ object Renderer {
         if (fillW <= 0.5f) return
         val fr = RectF(r.left + 1.2f, r.top + 1.2f, r.left + 1.2f + maxOf(fillW - 2.4f, r.height() - 2.4f), r.bottom - 1.2f)
         val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; setShadowLayer(if (pal.cyber) 9f else 5f, 0f, 0f, (color and 0x00FFFFFF) or 0x80000000.toInt()) }
-        c.drawRoundRect(fr, radius, radius, glow)
+        if (!pal.soft) c.drawRoundRect(fr, radius, radius, glow)
         val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = if (pal.cyber) LinearGradient(fr.left, 0f, fr.right, 0f, (color and 0x00FFFFFF) or 0xBB000000.toInt(), lighten(color, 0.45f), Shader.TileMode.CLAMP)
             else LinearGradient(fr.left, fr.top, fr.left, fr.bottom, lighten(color, 0.28f), color, Shader.TileMode.CLAMP)

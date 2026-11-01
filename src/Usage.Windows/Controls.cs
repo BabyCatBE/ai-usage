@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Media;
 using Usage.Core;
 
@@ -60,7 +60,7 @@ public sealed class NeuBar : ThemedElement
         var w = Math.Max(r.Height - 2, (r.Width - 2) * pct / 100);
         var fill = new Rect(1, 1, Math.Min(w, r.Width - 2), r.Height - 2);
         var glow = new RadialGradientBrush(WithAlpha(Accent, 70), Colors.Transparent);
-        dc.DrawRoundedRectangle(glow, null, new Rect(fill.X - 4, fill.Y - 4, fill.Width + 8, fill.Height + 8), rad + 4, rad + 4);
+        if (!Theme.Soft) dc.DrawRoundedRectangle(glow, null, new Rect(fill.X - 4, fill.Y - 4, fill.Width + 8, fill.Height + 8), rad + 4, rad + 4);
         var g = new LinearGradientBrush(Lighten(Accent, 0.3), Accent, 90); g.Freeze();
         dc.DrawRoundedRectangle(g, null, fill, rad - 1, rad - 1);
     }

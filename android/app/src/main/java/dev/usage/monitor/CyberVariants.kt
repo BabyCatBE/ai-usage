@@ -10,6 +10,7 @@ class CyberVariant(
     val primary: Int, val secondary: Int, val warn: Int, val crit: Int,
     val bgA: Int, val bgB: Int, val bgC: Int, val glow1: Int, val glow2: Int,
     val codex: Int, val claude: Int, val open: Int,
+    val soft: Boolean = false,
 ) {
     companion object {
         val all = listOf(
@@ -22,7 +23,12 @@ class CyberVariant(
         CyberVariant("sun-light", "Sunny Gold & Black", false, 0xFFFFFCE8.toInt(), 0xFFEBE2A8.toInt(), 0xFF15130A.toInt(), 0xFF6B6330.toInt(), 0xFFD9A400.toInt(), 0xFF111111.toInt(), 0xFFB26A00.toInt(), 0xFFC62828.toInt(), 0xFFFFF9CC.toInt(), 0xFFFFFDF0.toInt(), 0xFFFFF1A8.toInt(), 0xFFFFE600.toInt(), 0xFFFFB300.toInt(), 0xFF00796B.toInt(), 0xFFD84300.toInt(), 0xFF6A1B9A.toInt()),
         CyberVariant("lavender-light", "Lavender Circuit", false, 0xFFEEF2FF.toInt(), 0xFFD6DBF5.toInt(), 0xFF1B1B3A.toInt(), 0xFF5B5F97.toInt(), 0xFF6D28D9.toInt(), 0xFF2563EB.toInt(), 0xFFC77700.toInt(), 0xFFD91E4A.toInt(), 0xFFE8ECFF.toInt(), 0xFFF0E8FF.toInt(), 0xFFE0F0FF.toInt(), 0xFFA78BFA.toInt(), 0xFF60A5FA.toInt(), 0xFF0D9488.toInt(), 0xFFEA580C.toInt(), 0xFF9333EA.toInt()),
         CyberVariant("mint-light", "Mint Neon", false, 0xFFECFDF5.toInt(), 0xFFC7EEDC.toInt(), 0xFF06281C.toInt(), 0xFF3F7A62.toInt(), 0xFF059669.toInt(), 0xFF0891B2.toInt(), 0xFFB45309.toInt(), 0xFFDC2626.toInt(), 0xFFE4FBF0.toInt(), 0xFFEFFEF8.toInt(), 0xFFDAF5F7.toInt(), 0xFF34D399.toInt(), 0xFF22D3EE.toInt(), 0xFF047857.toInt(), 0xFFEA580C.toInt(), 0xFF7C3AED.toInt()),
+        CyberVariant("soft-slate", "Slate", true, 0xFF1D1F24.toInt(), 0xFF14161A.toInt(), 0xFFE6E7EC.toInt(), 0xFF9EA2AE.toInt(), 0xFF8FA6C9.toInt(), 0xFFA99FCB.toInt(), 0xFFD6B070.toInt(), 0xFFE0908C.toInt(), 0xFF1D1F24.toInt(), 0xFF20232A.toInt(), 0xFF1B1E23.toInt(), 0xFF8FA6C9.toInt(), 0xFFA99FCB.toInt(), 0xFF86BDA9.toInt(), 0xFFDBA283.toInt(), 0xFFB0A3D6.toInt(), true),
+        CyberVariant("soft-dusk", "Dusk", true, 0xFF211F26.toInt(), 0xFF17151B.toInt(), 0xFFE8E6EC.toInt(), 0xFFA09DAC.toInt(), 0xFFA6A0D0.toInt(), 0xFF86AFC4.toInt(), 0xFFD6B070.toInt(), 0xFFE0908C.toInt(), 0xFF211F26.toInt(), 0xFF25222D.toInt(), 0xFF1E1D24.toInt(), 0xFFA6A0D0.toInt(), 0xFF86AFC4.toInt(), 0xFF86BDA9.toInt(), 0xFFDBA283.toInt(), 0xFFC0A8D6.toInt(), true),
+        CyberVariant("soft-mist", "Mist", false, 0xFFF2F2F6.toInt(), 0xFFDADBE2.toInt(), 0xFF2A2C33.toInt(), 0xFF5F636E.toInt(), 0xFF4F6F9C.toInt(), 0xFF7B70A6.toInt(), 0xFF93660F.toInt(), 0xFFAB4440.toInt(), 0xFFF2F2F6.toInt(), 0xFFECEEF3.toInt(), 0xFFF5F3F0.toInt(), 0xFF4F6F9C.toInt(), 0xFF7B70A6.toInt(), 0xFF3F7F6D.toInt(), 0xFFA2653F.toInt(), 0xFF6F5FA3.toInt(), true),
+        CyberVariant("soft-sand", "Sand", false, 0xFFF5F1EA.toInt(), 0xFFDFD8CC.toInt(), 0xFF2E2A25.toInt(), 0xFF665F55.toInt(), 0xFF5F7352.toInt(), 0xFF9A7A5A.toInt(), 0xFF8F6410.toInt(), 0xFFA8453C.toInt(), 0xFFF5F1EA.toInt(), 0xFFF0EBE2.toInt(), 0xFFF7F4EE.toInt(), 0xFF5F7352.toInt(), 0xFF9A7A5A.toInt(), 0xFF4A7F68.toInt(), 0xFFA5603A.toInt(), 0xFF71619B.toInt(), true),
         )
-        fun get(id: String?) = all.firstOrNull { it.id == id } ?: all[0]
+        fun get(id: String?) = all.firstOrNull { it.id == id && !it.soft } ?: all.first { !it.soft }
+        fun getSoft(id: String?) = all.firstOrNull { it.id == id && it.soft } ?: all.first { it.soft }
     }
 }

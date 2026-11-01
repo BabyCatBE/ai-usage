@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -404,9 +404,9 @@ public partial class MainWindow : Window
         Caption(Loc.T("Idioma", "Language"));
         Choice(["auto", "pt", "en"], [Loc.T("Automático", "Automatic"), "Português", "English"], st.Language, v => st.Language = v);
         Caption(Loc.T("Tema", "Theme"));
-        Choice(["neu", "glass", "cyber"], ["Neumorphism", "Liquid glass", "Cyberpunk"], st.Style, v => st.Style = v);
-        if (st.Style != "cyber") Caption(Loc.T("Modo", "Mode"));
-        if (st.Style != "cyber") Choice(["auto", "light", "dark"], [Loc.T("Automático", "Automatic"), Loc.T("Claro", "Light"), Loc.T("Escuro", "Dark")], st.Theme, v => st.Theme = v);
+        Choice(["neu", "glass", "cyber", "soft"], ["Neumorphism", "Liquid glass", "Cyberpunk", Loc.T("Suave", "Soft")], st.Style, v => st.Style = v);
+        if (st.Style is not ("cyber" or "soft")) Caption(Loc.T("Modo", "Mode"));
+        if (st.Style is not ("cyber" or "soft")) Choice(["auto", "light", "dark"], [Loc.T("Automático", "Automatic"), Loc.T("Claro", "Light"), Loc.T("Escuro", "Dark")], st.Theme, v => st.Theme = v);
 
         // ---- visualization: layout, providers, indicators ----
         void ViewChoice(string[] values, string[] labels, string current, Action<string> set)
@@ -428,16 +428,17 @@ public partial class MainWindow : Window
             c.Click += (_, _) => { set(c.IsChecked == true); ApplyView(); };
             SettingsBody.Children.Add(c);
         }
-        if (st.Style == "cyber")
+        if (st.Style is "cyber" or "soft")
         {
-            Caption(Loc.T("Cyberpunk: escolha o submodo", "Cyberpunk: pick a sub-theme"));
+            var isSoft = st.Style == "soft";
+            Caption(isSoft ? Loc.T("Suave: escolha a paleta", "Soft: pick a palette") : Loc.T("Cyberpunk: escolha o submodo", "Cyberpunk: pick a sub-theme"));
             foreach (var dark in new[] { true, false })
             {
                 SettingsBody.Children.Add(new TextBlock { Text = dark ? Loc.T("Escuros", "Dark") : Loc.T("Claros", "Light"), Style = (Style)FindResource("Dim"), FontSize = 11, Margin = new Thickness(0, 4, 0, 0) });
                 var wrap = new WrapPanel();
-                foreach (var v in CyberVariant.All.Where(x => x.Dark == dark))
+                foreach (var v in CyberVariant.All.Where(x => x.Dark == dark && x.Soft == isSoft))
                 {
-                    var sel = v.Id == st.CyberVariant;
+                    var sel = v.Id == (isSoft ? st.SoftVariant : st.CyberVariant);
                     var content = new StackPanel { Orientation = Orientation.Horizontal };
                     var dot = new Grid { Width = 16, Height = 16, Margin = new Thickness(0, 0, 7, 0) };
                     dot.Children.Add(new System.Windows.Shapes.Ellipse { Fill = new LinearGradientBrush(v.Primary, v.Secondary, 45), Stroke = new SolidColorBrush(v.Dark ? Colors.White : Colors.Black) { Opacity = 0.35 }, StrokeThickness = 1 });
@@ -445,7 +446,7 @@ public partial class MainWindow : Window
                     content.Children.Add(new TextBlock { Text = v.Name, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Foreground = sel ? new SolidColorBrush(Theme.Highlight) : (Brush)FindResource("TextBrush") });
                     var b = new Button { Content = content, Style = (Style)FindResource("NeuButton"), Padding = new Thickness(10, 6, 12, 6), Margin = new Thickness(0, 4, 6, 4) };
                     var vid = v.Id;
-                    b.Click += (_, _) => { st.CyberVariant = vid; ApplyView(); };
+                    b.Click += (_, _) => { if (isSoft) st.SoftVariant = vid; else st.CyberVariant = vid; ApplyView(); };
                     wrap.Children.Add(b);
                 }
                 SettingsBody.Children.Add(wrap);

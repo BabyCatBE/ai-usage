@@ -149,23 +149,24 @@ class MainActivity : Activity() {
             p.removeAllViews()
             p.addView(label(if (Fmt.pt) "Aparência" else "Appearance", 17f, pal.text, true))
             p.addView(label(if (Fmt.pt) "Tema" else "Theme", 13f, pal.dim).apply { setPadding(dpi(4f), dpi(8f), 0, dpi(2f)) })
-            val looks = listOf("neu" to "Neumorphism", "glass" to "Liquid glass", "cyber" to "Cyberpunk")
+            val looks = listOf("neu" to "Neumorphism", "glass" to "Liquid glass", "cyber" to "Cyberpunk", "soft" to (if (Fmt.pt) "Suave" else "Soft"))
             row(p, *looks.map { (id, name) -> Neu.button(this, pal, name, if (store.style == id) pal.accent("codex") else null) {
                 if (store.style != id) { store.style = id; UsageWidget.updateAll(this); recreate() }
             } }.toTypedArray())
-            if (store.style == "cyber") {
-                p.addView(label(if (Fmt.pt) "Submodo Cyberpunk" else "Cyberpunk sub-theme", 13f, pal.dim).apply { setPadding(dpi(4f), dpi(8f), 0, dpi(2f)) })
+            if (store.style == "cyber" || store.style == "soft") {
+                val isSoft = store.style == "soft"
+                p.addView(label(if (isSoft) (if (Fmt.pt) "Paleta Suave" else "Soft palette") else if (Fmt.pt) "Submodo Cyberpunk" else "Cyberpunk sub-theme", 13f, pal.dim).apply { setPadding(dpi(4f), dpi(8f), 0, dpi(2f)) })
                 for (dark in listOf(true, false)) {
                     p.addView(label(if (dark) (if (Fmt.pt) "Escuros" else "Dark") else (if (Fmt.pt) "Claros" else "Light"), 11f, pal.dim).apply { setPadding(dpi(4f), dpi(4f), 0, 0) })
-                    val vs = CyberVariant.all.filter { it.dark == dark }
-                    row(p, *vs.map { v -> Neu.button(this, pal, v.name, if (store.cyberVariant == v.id) v.primary else null) {
-                        if (store.cyberVariant != v.id) { store.cyberVariant = v.id; UsageWidget.updateAll(this); recreate() }
+                    val vs = CyberVariant.all.filter { it.dark == dark && it.soft == isSoft }
+                    row(p, *vs.map { v -> Neu.button(this, pal, v.name, if ((if (isSoft) store.softVariant else store.cyberVariant) == v.id) v.primary else null) {
+                        if ((if (isSoft) store.softVariant else store.cyberVariant) != v.id) { if (isSoft) store.softVariant = v.id else store.cyberVariant = v.id; UsageWidget.updateAll(this); recreate() }
                     } }.toTypedArray())
                 }
             }
-            if (store.style != "cyber") p.addView(label(if (Fmt.pt) "Modo" else "Mode", 13f, pal.dim).apply { setPadding(dpi(4f), dpi(8f), 0, dpi(2f)) })
+            if (store.style != "cyber" && store.style != "soft") p.addView(label(if (Fmt.pt) "Modo" else "Mode", 13f, pal.dim).apply { setPadding(dpi(4f), dpi(8f), 0, dpi(2f)) })
             val modes = listOf("auto" to (if (Fmt.pt) "Automático" else "Automatic"), "light" to (if (Fmt.pt) "Claro" else "Light"), "dark" to (if (Fmt.pt) "Escuro" else "Dark"))
-            if (store.style != "cyber") row(p, *modes.map { (id, name) -> Neu.button(this, pal, name, if (store.theme == id) pal.accent("codex") else null) {
+            if (store.style != "cyber" && store.style != "soft") row(p, *modes.map { (id, name) -> Neu.button(this, pal, name, if (store.theme == id) pal.accent("codex") else null) {
                 if (store.theme != id) { store.theme = id; UsageWidget.updateAll(this); recreate() }
             } }.toTypedArray())
             val on = store.showIcons

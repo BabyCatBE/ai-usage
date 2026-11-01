@@ -32,10 +32,15 @@ class Store(context: Context) {
         get() = (prefs.getString("theme", "auto") ?: "auto").takeIf { it != "glass" } ?: "auto"
         set(v) { prefs.edit().putString("theme", v).apply() }
 
-    /** Look: neu (soft neumorphism) | glass (liquid glass) | cyber (neon cyberpunk). A legacy theme value "glass" counts as the glass style. */
+    /** Look: neu (soft neumorphism) | glass (liquid glass) | cyber (neon cyberpunk) | soft (muted). A legacy theme value "glass" counts as the glass style. */
     var style: String
         get() = prefs.getString("style", null) ?: if (prefs.getString("theme", "") == "glass") "glass" else "neu"
         set(v) { prefs.edit().putString("style", v).apply() }
+
+    /** Soft sub-theme id (see [CyberVariant.getSoft]). */
+    var softVariant: String
+        get() = prefs.getString("softVariant", null) ?: CyberVariant.getSoft(null).id
+        set(v) { prefs.edit().putString("softVariant", v).apply() }
 
     /** Cyberpunk sub-theme id (see [CyberVariant]). */
     var cyberVariant: String
@@ -45,7 +50,7 @@ class Store(context: Context) {
     fun palette(context: Context): Palette {
         val night = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         val dark = when (theme) { "dark" -> true; "light" -> false; else -> night }
-        val v = if (style == "cyber") CyberVariant.get(cyberVariant) else null   // each cyber sub-theme is either dark or light
+        val v = if (style == "cyber") CyberVariant.get(cyberVariant) else if (style == "soft") CyberVariant.getSoft(softVariant) else null   // each cyber sub-theme is either dark or light
         return Palette(v?.dark ?: dark, style == "glass", v)
     }
 

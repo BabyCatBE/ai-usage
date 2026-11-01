@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -102,12 +102,13 @@ public static class Theme
     public static bool Dark { get; private set; }
     public static bool Glass { get; private set; }
     public static bool Cyber { get; private set; }
+    public static bool Soft { get; private set; }
     public static bool PowerSaver { get; private set; }
     public static CyberVariant? Variant { get; private set; }
     public static Color Base, Light, Shade, Text, Dim, Highlight, Warn = Color.FromRgb(0xE6, 0xA2, 0x3C), Crit = Color.FromRgb(0xE5, 0x53, 0x4B);
     public static event Action? Changed;
 
-    public static Color Accent(string id) => Cyber && Variant is { } v
+    public static Color Accent(string id) => Variant is { } v
         ? id switch
         {
             "codex" => v.Codex,
@@ -152,15 +153,17 @@ public static class Theme
     {
         if (st.Theme == "glass") { st.Theme = "auto"; st.Style = "glass"; } // older settings files
         Cyber = st.Style == "cyber";
-        Variant = Cyber ? CyberVariant.Get(st.CyberVariant) : null;
+        Soft = st.Style == "soft";
+        Variant = Cyber ? CyberVariant.Get(st.CyberVariant) : Soft ? CyberVariant.GetSoft(st.SoftVariant) : null;
         PowerSaver = st.PowerSaver;
         Glass = st.Style == "glass";
-        Dark = Cyber ? Variant!.Dark : st.Theme == "dark" || (st.Theme != "light" && SystemDark());   // each cyber sub-theme is either dark or light
+        Dark = Variant is not null ? Variant.Dark : st.Theme == "dark" || (st.Theme != "light" && SystemDark());   // each cyber sub-theme is either dark or light
         var opaque = Glass && ReduceTransparency();
 
         Highlight = Accent("codex");
         Warn = Color.FromRgb(0xE6, 0xA2, 0x3C); Crit = Color.FromRgb(0xE5, 0x53, 0x4B);
-        if (Cyber) { var v = Variant!; Base = v.Base; Light = v.Primary; Shade = v.Ink; Text = v.Text; Dim = v.Dim; Warn = v.Warn; Crit = v.Crit; Highlight = v.Primary; }
+        if (Soft) { var v = Variant!; Base = v.Base; Light = Mix(v.Base, Colors.White, v.Dark ? 0.06 : 0.55); Shade = v.Ink; Text = v.Text; Dim = v.Dim; Warn = v.Warn; Crit = v.Crit; Highlight = v.Primary; }
+        else if (Cyber) { var v = Variant!; Base = v.Base; Light = v.Primary; Shade = v.Ink; Text = v.Text; Dim = v.Dim; Warn = v.Warn; Crit = v.Crit; Highlight = v.Primary; }
         else if (Glass && Dark) { Base = Color.FromRgb(0x0B, 0x10, 0x24); Light = Color.FromRgb(0x6E, 0x80, 0xB0); Shade = Color.FromRgb(0x05, 0x08, 0x18); Text = Color.FromRgb(0xF2, 0xF6, 0xFF); Dim = Color.FromRgb(0xB8, 0xC6, 0xE4); }
         else if (Glass) { Base = Color.FromRgb(0xE9, 0xEE, 0xFA); Light = Colors.White; Shade = Color.FromRgb(0x8E, 0xA0, 0xC4); Text = Color.FromRgb(0x1B, 0x25, 0x3D); Dim = Color.FromRgb(0x4F, 0x5F, 0x80); }
         else if (Dark) { Base = Color.FromRgb(0x2A, 0x2E, 0x35); Light = Color.FromRgb(0x38, 0x3D, 0x46); Shade = Color.FromRgb(0x1B, 0x1E, 0x23); Text = Color.FromRgb(0xE9, 0xEC, 0xF2); Dim = Color.FromRgb(0x9A, 0xA3, 0xB2); }
@@ -192,7 +195,21 @@ public static class Theme
             // blurred glow = an offscreen bitmap per element: only when the user turned the power saver off
             r["ShadowDark"] = PowerSaver ? null : Glow(v.Primary, 16, Dark ? 0.38 : 0.28);
             r["ShadowDarkSm"] = PowerSaver ? null : Glow(v.Secondary, 8, Dark ? 0.4 : 0.3);
-        }        else if (Glass)
+        }
+        else if (Soft)
+        {
+            // flat, quiet surfaces: a hairline border, no glow, no blur, no shadow; colour is kept for the bars and status only
+            var v = Variant!;
+            r["WindowBrush"] = SoftBackground(v);
+            r["CardBack"] = B(Mix(v.Base, Colors.White, v.Dark ? 0.045 : 0.5));
+            r["CardFill"] = B(Colors.Transparent);
+            r["CardBorder"] = B(A(Dark ? (byte)0x30 : (byte)0x38, v.Dim));
+            r["CardBorderThickness"] = new Thickness(1);
+            r["CardRadius"] = new CornerRadius(16); r["DockRightRadius"] = new CornerRadius(16, 0, 0, 16); r["DockLeftRadius"] = new CornerRadius(0, 16, 16, 0);
+            r["ButtonRadius"] = new CornerRadius(11); r["RoundRadius"] = new CornerRadius(16);
+            r["ShadowLight"] = null; r["ShadowDark"] = null; r["ShadowLightSm"] = null; r["ShadowDarkSm"] = null;
+        }
+        else if (Glass)
         {
             r["WindowBrush"] = GlassBackground(Dark);
             // Apple's rule: text-heavy surfaces use the regular variant, never clear glass. Panes stay mostly opaque so numbers never fight
@@ -266,7 +283,7 @@ public static class Theme
             DwmSetWindowAttribute(h, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, 4);
             var cap = Dark ? Rgb(Base) : DWMWA_COLOR_DEFAULT;
             var txt = Dark ? Rgb(Text) : DWMWA_COLOR_DEFAULT;
-            var border = Cyber && Variant is { } cv ? Rgb(Mix(cv.Base, cv.Primary, Dark ? 0.55 : 0.7)) : Dark ? Rgb(Glass ? Color.FromRgb(0x2E, 0x39, 0x66) : Color.FromRgb(0x3A, 0x3F, 0x4A)) : DWMWA_COLOR_DEFAULT;
+            var border = Soft && Variant is { } sv ? Rgb(Mix(sv.Base, sv.Dim, 0.3)) : Cyber && Variant is { } cv ? Rgb(Mix(cv.Base, cv.Primary, Dark ? 0.55 : 0.7)) : Dark ? Rgb(Glass ? Color.FromRgb(0x2E, 0x39, 0x66) : Color.FromRgb(0x3A, 0x3F, 0x4A)) : DWMWA_COLOR_DEFAULT;
             DwmSetWindowAttribute(h, DWMWA_CAPTION_COLOR, ref cap, 4);
             DwmSetWindowAttribute(h, DWMWA_TEXT_COLOR, ref txt, 4);
             DwmSetWindowAttribute(h, DWMWA_BORDER_COLOR, ref border, 4);
@@ -288,6 +305,13 @@ public static class Theme
         RenderOptions.SetCachingHint(brush, CachingHint.Cache);
         brush.Freeze();
         return brush;
+    }
+
+    /// <summary>Backdrop of a soft sub-theme: a barely-there three-stop gradient, nothing else.</summary>
+    static Brush SoftBackground(CyberVariant v)
+    {
+        var bg = Grad(new Point(0, 0), new Point(1, 1), (v.BgA, 0), (v.BgB, 0.55), (v.BgC, 1));
+        return bg;
     }
 
     /// <summary>Backdrop of a cyberpunk sub-theme: three-stop gradient, a faint grid of the primary colour and two corner glows. Cached as a bitmap.</summary>

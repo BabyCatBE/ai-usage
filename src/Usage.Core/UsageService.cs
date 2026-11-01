@@ -76,9 +76,19 @@ public sealed class UsageService : IDisposable
     static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)];
     static readonly HashSet<string> Transient = ["USAGE_UNAVAILABLE", "CLI_TIMEOUT", "RPC_FAILED", "CLI_EXITED", "CLI_WRITE_FAILED", "CLI_START_FAILED", "COLLECTION_FAILED", "AUTH_STATUS_INVALID"];
 
+    // Rate-limit protection: the Claude usage endpoint answers 429 when polled too often, and in-cycle retries kept it blocked.
+    // Space out successful reads and, on USAGE_UNAVAILABLE, back off exponentially (no in-cycle retries) until the limit clears.
+    static readonly Dictionary<string, TimeSpan> MinSpacing = new() { ["claude"] = TimeSpan.FromMinutes(3) };
+    static readonly TimeSpan[] RateLimitBackoff = [TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4), TimeSpan.FromMinutes(8), TimeSpan.FromMinutes(15)];
+    static readonly Dictionary<string, (int Fails, DateTimeOffset NextAllowed)> cooldown = [];
+    static readonly object cooldownLock = new();
+
     static async Task<ProviderUsage> CollectOne(IUsageProvider provider, ProviderUsage? previous, CancellationToken ct)
     {
         string code = "COLLECTION_FAILED";
+        lock (cooldownLock)
+            if (previous is { HasData: true } && cooldown.TryGetValue(provider.Id, out var cd) && DateTimeOffset.UtcNow < cd.NextAllowed)
+                return previous with { Status = cd.Fails > 0 ? ProviderStatus.Stale : previous.Status, ErrorCode = cd.Fails > 0 ? "USAGE_UNAVAILABLE" : null };
         for (var attempt = 1; attempt <= RetryDelays.Length + 1; attempt++)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -88,6 +98,9 @@ public sealed class UsageService : IDisposable
             {
                 var r = await provider.CollectAsync(cts.Token);
                 if (attempt > 1) DiagLog.Write(provider.Id, $"recovered on attempt {attempt} ({sw.ElapsedMilliseconds} ms)");
+                lock (cooldownLock)
+                    if (MinSpacing.TryGetValue(provider.Id, out var gap)) cooldown[provider.Id] = (0, DateTimeOffset.UtcNow + gap);
+                    else cooldown.Remove(provider.Id);
                 return new ProviderUsage(provider.Id, provider.Name, ProviderStatus.Ok, DateTimeOffset.UtcNow, null, r.Plan, r.Windows, r.Models ?? [], r.Details ?? []);
             }
             catch (Exception e)
@@ -100,6 +113,17 @@ public sealed class UsageService : IDisposable
                     _ => "COLLECTION_FAILED",
                 };
                 DiagLog.Write(provider.Id, $"attempt {attempt} failed: {code} after {sw.ElapsedMilliseconds} ms ({e.GetType().Name}){(e is UsageException ? "" : ": " + e.Message)}");
+                if (code == "USAGE_UNAVAILABLE")
+                {
+                    lock (cooldownLock)
+                    {
+                        var fails = cooldown.TryGetValue(provider.Id, out var c0) ? c0.Fails + 1 : 1;
+                        var wait = RateLimitBackoff[Math.Min(fails, RateLimitBackoff.Length) - 1];
+                        cooldown[provider.Id] = (fails, DateTimeOffset.UtcNow + wait);
+                        DiagLog.Write(provider.Id, $"rate limited; backing off {wait.TotalMinutes:0} min (failure #{fails})");
+                    }
+                    break;
+                }
                 if (attempt <= RetryDelays.Length && Transient.Contains(code) && !ct.IsCancellationRequested)
                 {
                     try { await Task.Delay(RetryDelays[attempt - 1], ct); } catch (OperationCanceledException) { code = "CANCELLED"; break; }

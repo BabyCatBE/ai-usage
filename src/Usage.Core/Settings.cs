@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
 using Usage.Core.Providers;
 
@@ -26,7 +26,7 @@ public sealed class Settings
     public int IntervalMinutes { get; set; } = 5;
     public string Language { get; set; } = "auto";   // auto | pt | en
     public string Theme { get; set; } = "auto";      // colour mode: auto | light | dark
-    public string Style { get; set; } = "neu";       // look: neu (soft neumorphism) | glass (liquid glass) | cyber (neon cyberpunk)
+    public string Style { get; set; } = "neu";       // look: neu (neumorphism) | glass (liquid glass) | cyber (neon cyberpunk) | soft (muted, low-saturation)
     public string RelayUrl { get; set; } = Defaults.Relay;
     public string WidgetEdge { get; set; } = "Right";   // Right | Left: docked to the middle of that screen edge
     public bool WidgetEnabled { get; set; } = true;
@@ -46,6 +46,7 @@ public sealed class Settings
     public bool ShowModels { get; set; } = true;
     public bool ShowUpdated { get; set; } = true;
     public bool ShowProviderBar { get; set; } = true;            // quick on/off chips under the header
+    public string SoftVariant { get; set; } = "soft-slate";      // sub-theme of the soft look (2 dark, 2 light)
     public string CyberVariant { get; set; } = "neon-night";     // sub-theme of the cyberpunk look (several dark, several light)
 
     // ---- performance (the app must stay invisible on a weak PC) --------------------------------------------

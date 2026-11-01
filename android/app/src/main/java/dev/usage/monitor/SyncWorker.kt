@@ -38,6 +38,8 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
         } finally {
             store.busy = false
             UsageWidget.updateAll(ctx)
+            // WorkManager periodic work cannot run more often than every 15 min, so chain one-time work every 5 min.
+            if (!refresh) scheduleNext(ctx)
         }
         return Result.success()
     }
@@ -55,9 +57,19 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
         fun schedulePeriodic(ctx: Context) {
             val req = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES).setConstraints(net).build()
             WorkManager.getInstance(ctx).enqueueUniquePeriodicWork("periodic", ExistingPeriodicWorkPolicy.KEEP, req)
+            scheduleNext(ctx)
         }
 
-        fun cancelPeriodic(ctx: Context) { WorkManager.getInstance(ctx).cancelUniqueWork("periodic") }
+        /** Self-rescheduling 5-minute sync (the agreed maximum staleness); the 15-minute periodic job is only a safety net. */
+        fun scheduleNext(ctx: Context) {
+            val req = OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(net).setInitialDelay(5, TimeUnit.MINUTES).build()
+            WorkManager.getInstance(ctx).enqueueUniqueWork("chain", ExistingWorkPolicy.REPLACE, req)
+        }
+
+        fun cancelPeriodic(ctx: Context) {
+            WorkManager.getInstance(ctx).cancelUniqueWork("periodic")
+            WorkManager.getInstance(ctx).cancelUniqueWork("chain")
+        }
 
         fun refreshNow(ctx: Context) {
             val store = Store(ctx)
