@@ -16,6 +16,8 @@ import dev.usage.monitor.Renderer
 import dev.usage.monitor.Store
 import dev.usage.monitor.SyncWorker
 import dev.usage.monitor.UiState
+import dev.usage.monitor.cupertino.CupertinoWidget
+import dev.usage.monitor.cupertino.Type
 
 class UsageWidget : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -52,9 +54,19 @@ class UsageWidget : AppWidgetProvider() {
             val store = Store(context)
             val state = stateOf(store)
             val now = System.currentTimeMillis()
-            val bmp = Renderer.render(state, (wDp * density * k).toInt(), (hDp * density * k).toInt(), density * k, store.palette(context), now)
+            val pal = store.palette(context)
+            val wPx = (wDp * density * k).toInt(); val hPx = (hDp * density * k).toInt()
+            val bmp = if (pal.cupertino) {
+                Type.init(context)
+                val corner = (opts.get("semShapeRadius") as? Number)?.toFloat()?.takeIf { it > 0f } ?: 24f
+                // One UI scales widgets down (hsResizeRatio ~0.83): lay out for the size it is really shown at, so text keeps its point size.
+                val ratio = (opts.get("hsResizeRatio") as? Number)?.toFloat()?.takeIf { it in 0.5f..1f } ?: 1f
+                CupertinoWidget.render(state, wPx, hPx, density * k / ratio, pal.dark, now, store.widgetGlass, corner * ratio)
+            } else Renderer.render(state, wPx, hPx, density * k, pal, now)
 
-            val views = RemoteViews(context.packageName, R.layout.widget)
+            val views = RemoteViews(context.packageName, if (pal.cupertino) R.layout.widget_cupertino else R.layout.widget)
+            // One UI Home blurs the wallpaper under @android:id/background when its alpha is 1-254.
+            if (pal.cupertino) views.setInt(android.R.id.background, "setBackgroundColor", CupertinoWidget.launcherTint(pal.dark, store.widgetGlass, CupertinoWidget.lightWallpaper(context)))
             views.setImageViewBitmap(R.id.image, bmp)
             views.setContentDescription(R.id.image, summary(state))
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

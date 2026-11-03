@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -404,7 +404,7 @@ public partial class MainWindow : Window
         Caption(Loc.T("Idioma", "Language"));
         Choice(["auto", "pt", "en"], [Loc.T("Automático", "Automatic"), "Português", "English"], st.Language, v => st.Language = v);
         Caption(Loc.T("Tema", "Theme"));
-        Choice(["neu", "glass", "cyber", "soft"], ["Neumorphism", "Liquid glass", "Cyberpunk", Loc.T("Suave", "Soft")], st.Style, v => st.Style = v);
+        Choice(["neu", "mono", "glass", "cyber", "soft", "cupertino"], ["Neumorphism", "Mono", "Liquid glass", "Cyberpunk", Loc.T("Suave", "Soft"), "Cupertino"], st.Style, v => st.Style = v);
         if (st.Style is not ("cyber" or "soft")) Caption(Loc.T("Modo", "Mode"));
         if (st.Style is not ("cyber" or "soft")) Choice(["auto", "light", "dark"], [Loc.T("Automático", "Automatic"), Loc.T("Claro", "Light"), Loc.T("Escuro", "Dark")], st.Theme, v => st.Theme = v);
 
@@ -516,6 +516,7 @@ public partial class MainWindow : Window
         Check(Loc.T("Mostrar o widget no canto da tela", "Show the widget on a screen corner"), st.WidgetEnabled, v => st.WidgetEnabled = v);
         Choice(["Right", "Left"], [Loc.T("Borda direita", "Right edge"), Loc.T("Borda esquerda", "Left edge")], st.WidgetEdge, v => st.WidgetEdge = v);
         Check(Loc.T("Sempre sobre outras janelas", "Always on top"), st.WidgetAlwaysOnTop, v => st.WidgetAlwaysOnTop = v);
+        Check(Loc.T("Teste: todos os usos em anéis no widget retraído", "Test: every window as rings on the retracted widget"), st.WidgetAllRings, v => st.WidgetAllRings = v);
         Caption(Loc.T("Desempenho", "Performance"));
         ViewCheck(Loc.T("Modo economia: sem sombras/efeitos pesados, prioridade baixa", "Power saver: no heavy shadows/effects, low priority"), st.PowerSaver, v => st.PowerSaver = v);
         ViewCheck(Loc.T("Pausar atualização automática quando eu estiver ausente (10 min)", "Pause automatic refresh while I am away (10 min)"), st.PauseWhenIdle, v => st.PauseWhenIdle = v);

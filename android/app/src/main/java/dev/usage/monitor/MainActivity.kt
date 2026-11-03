@@ -21,6 +21,7 @@ import android.widget.Toast
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import dev.usage.monitor.cupertino.CupertinoScreen
 import dev.usage.monitor.widget.UsageWidget
 
 class MainActivity : Activity() {
@@ -32,15 +33,21 @@ class MainActivity : Activity() {
     private var linkUp = false
     private val ui = android.os.Handler(android.os.Looper.getMainLooper())
     private var busyUntil = 0L
+    private var cupertino: CupertinoScreen? = null
+    /** Page stack to restore when the Cupertino screen is rebuilt (mode change, recreation). */
+    private var savedStack: List<String>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = Store(this)
         pal = store.palette(this)
+        savedStack = savedInstanceState?.getStringArrayList("cupertinoStack")
+        if (!pal.cupertino) {
         window.statusBarColor = pal.base
         window.navigationBarColor = pal.base
+        }
         window.decorView // installs the decor view; insetsController is null before it exists
-        if (!pal.dark && android.os.Build.VERSION.SDK_INT >= 30)
+        if (!pal.cupertino && !pal.dark && android.os.Build.VERSION.SDK_INT >= 30)
             window.insetsController?.setSystemBarsAppearance(
                 android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
                 android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
@@ -52,6 +59,17 @@ class MainActivity : Activity() {
 
     override fun onStart() { super.onStart(); restartLive(); refreshState() }
     override fun onStop() { super.onStop(); live?.stop(); live = null }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        cupertino?.let { outState.putStringArrayList("cupertinoStack", ArrayList(it.stackIds)) }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (cupertino?.handleBack() == true) return   // Android 13+ uses the screen's OnBackInvokedCallback instead
+        @Suppress("DEPRECATION") super.onBackPressed()
+    }
 
     // ---- pairing ---------------------------------------------------------------------------------------------
 
@@ -74,6 +92,7 @@ class MainActivity : Activity() {
         store.pairing = null
         SyncWorker.cancelPeriodic(this)
         UsageWidget.updateAll(this)
+        savedStack = listOf("main")
         build()
     }
 
@@ -91,7 +110,10 @@ class MainActivity : Activity() {
 
     private fun currentState() = UiState(store.snapshot, store.pairing != null, store.hostOnline, store.receivedAtMs, System.currentTimeMillis() < busyUntil, store.icons, store.showIcons)
 
-    private fun refreshState() { if (::dashboard.isInitialized) { dashboard.state = currentState() } }
+    private fun refreshState() {
+        val c = cupertino
+        if (c != null) c.update(currentState()) else if (::dashboard.isInitialized) dashboard.state = currentState()
+    }
 
     private fun refresh() {
         val l = live
@@ -104,6 +126,9 @@ class MainActivity : Activity() {
     // ---- layout -----------------------------------------------------------------------------------------------
 
     private fun build() {
+        if (pal.cupertino) { buildCupertino(savedStack ?: cupertino?.stackIds ?: listOf("main")); savedStack = null; return }
+        cupertino?.dispose()
+        cupertino = null
         val scroll = ScrollView(this).apply {
             if (pal.frosted) background = GlassBackdrop(pal) else setBackgroundColor(pal.base); isFillViewport = true; overScrollMode = View.OVER_SCROLL_NEVER
             setOnApplyWindowInsetsListener { v, insets ->
@@ -121,6 +146,24 @@ class MainActivity : Activity() {
         appearancePanel()
         if (pairing == null) pairPanel() else connectedPanel(pairing)
         setContentView(scroll)
+    }
+
+    /** The Apple-design screen (Cupertino look): its own navigation, settings and Liquid Glass controls. */
+    private fun buildCupertino(stack: List<String>) {
+        pal = store.palette(this)
+        cupertino?.dispose()
+        val screen = CupertinoScreen(this, store, CupertinoScreen.Actions(
+            refresh = ::refresh,
+            pair = { text -> pair(text).also { if (it) { savedStack = listOf("main"); build(); restartLive() } } },
+            scan = ::scan,
+            unpair = ::unpair,
+            pinWidget = ::pinWidget,
+            restyle = { UsageWidget.updateAll(this); recreate() },
+            remode = { st -> savedStack = st; UsageWidget.updateAll(this); build() },
+            widgetChanged = { UsageWidget.updateAll(this) },
+        ))
+        cupertino = screen
+        screen.show(stack, currentState())
     }
 
     private fun label(text: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -149,8 +192,8 @@ class MainActivity : Activity() {
             p.removeAllViews()
             p.addView(label(if (Fmt.pt) "Aparência" else "Appearance", 17f, pal.text, true))
             p.addView(label(if (Fmt.pt) "Tema" else "Theme", 13f, pal.dim).apply { setPadding(dpi(4f), dpi(8f), 0, dpi(2f)) })
-            val looks = listOf("neu" to "Neumorphism", "glass" to "Liquid glass", "cyber" to "Cyberpunk", "soft" to (if (Fmt.pt) "Suave" else "Soft"))
-            row(p, *looks.map { (id, name) -> Neu.button(this, pal, name, if (store.style == id) pal.accent("codex") else null) {
+            val looks = listOf("neu" to "Neumorphism", "glass" to "Liquid glass", "cyber" to "Cyberpunk", "soft" to (if (Fmt.pt) "Suave" else "Soft"), "mono" to "Mono") + (if (android.os.Build.VERSION.SDK_INT >= 29) listOf("cupertino" to "Cupertino") else emptyList())
+            for (chunk in looks.chunked(3)) row(p, *chunk.map { (id, name) -> Neu.button(this, pal, name, if (store.style == id) pal.accent("codex") else null) {
                 if (store.style != id) { store.style = id; UsageWidget.updateAll(this); recreate() }
             } }.toTypedArray())
             if (store.style == "cyber" || store.style == "soft") {
@@ -217,7 +260,7 @@ class MainActivity : Activity() {
     private fun scan() {
         val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
         GmsBarcodeScanning.getClient(this, options).startScan()
-            .addOnSuccessListener { code -> code.rawValue?.let { if (pair(it)) { build(); restartLive() } } }
+            .addOnSuccessListener { code -> code.rawValue?.let { if (pair(it)) { savedStack = listOf("main"); build(); restartLive() } } }
             .addOnFailureListener { Toast.makeText(this, if (Fmt.pt) "Não foi possível abrir o leitor de QR. Cole o código." else "QR scanner unavailable. Paste the code.", Toast.LENGTH_LONG).show() }
     }
 

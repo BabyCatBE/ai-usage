@@ -23,19 +23,19 @@ data class UiState(
 
 enum class Level { DETAIL, NORMAL, COMPACT, MICRO }
 
-class Palette(val dark: Boolean, val glass: Boolean = false, val variant: CyberVariant? = null) {
+class Palette(val dark: Boolean, val glass: Boolean = false, val variant: CyberVariant? = null, val cupertino: Boolean = false, val mono: Boolean = false) {
     val soft = variant?.soft == true
     val cyber = variant != null && !soft
     /** Liquid glass, the neon look and the soft look share the backdrop drawing path. */
     val frosted = glass || variant != null
-    val base = variant?.base ?: if (glass) (if (dark) 0xFF0B1024.toInt() else 0xFFE9EEFA.toInt()) else if (dark) 0xFF2A2E35.toInt() else 0xFFE4E8EE.toInt()
-    val light = if (soft) mixWhite(variant!!.base, if (variant.dark) 0.06f else 0.55f) else variant?.primary ?: if (glass) (if (dark) 0xFF6E80B0.toInt() else 0xFFFFFFFF.toInt()) else if (dark) 0xFF383D46.toInt() else 0xFFFFFFFF.toInt()
-    val shade = variant?.ink ?: if (glass) (if (dark) 0xFF050818.toInt() else 0xFF8EA0C4.toInt()) else if (dark) 0xFF1B1E23.toInt() else 0xFFA9B4C6.toInt()
-    val text = variant?.text ?: if (glass) (if (dark) 0xFFF2F6FF.toInt() else 0xFF1B253D.toInt()) else if (dark) 0xFFE9ECF2.toInt() else 0xFF343B48.toInt()
-    val dim = variant?.dim ?: if (glass) (if (dark) 0xFFB8C6E4.toInt() else 0xFF4F5F80.toInt()) else if (dark) 0xFF9AA3B2.toInt() else 0xFF7A8496.toInt()
-    val warn = variant?.warn ?: 0xFFE6A23C.toInt()
+    val base = if (mono) (if (dark) 0xFF101010.toInt() else 0xFFF2F2F2.toInt()) else variant?.base ?: if (glass) (if (dark) 0xFF0B1024.toInt() else 0xFFE9EEFA.toInt()) else if (dark) 0xFF2A2E35.toInt() else 0xFFE4E8EE.toInt()
+    val light = if (mono) (if (dark) 0xFF242424.toInt() else 0xFFFFFFFF.toInt()) else if (soft) mixWhite(variant!!.base, if (variant.dark) 0.06f else 0.55f) else variant?.primary ?: if (glass) (if (dark) 0xFF6E80B0.toInt() else 0xFFFFFFFF.toInt()) else if (dark) 0xFF383D46.toInt() else 0xFFFFFFFF.toInt()
+    val shade = if (mono) (if (dark) 0xFF000000.toInt() else 0xFFC4C4C4.toInt()) else variant?.ink ?: if (glass) (if (dark) 0xFF050818.toInt() else 0xFF8EA0C4.toInt()) else if (dark) 0xFF1B1E23.toInt() else 0xFFA9B4C6.toInt()
+    val text = if (mono) (if (dark) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()) else variant?.text ?: if (glass) (if (dark) 0xFFF2F6FF.toInt() else 0xFF1B253D.toInt()) else if (dark) 0xFFE9ECF2.toInt() else 0xFF343B48.toInt()
+    val dim = if (mono) (if (dark) 0xFF9A9A9A.toInt() else 0xFF5E5E5E.toInt()) else variant?.dim ?: if (glass) (if (dark) 0xFFB8C6E4.toInt() else 0xFF4F5F80.toInt()) else if (dark) 0xFF9AA3B2.toInt() else 0xFF7A8496.toInt()
+    val warn = if (mono) (if (dark) 0xFFC8C8C8.toInt() else 0xFF444444.toInt()) else variant?.warn ?: 0xFFE6A23C.toInt()
     val crit = variant?.crit ?: 0xFFE5534B.toInt()
-    fun accent(id: String) = if (variant != null) when (id) {
+    fun accent(id: String) = if (mono) text else if (variant != null) when (id) {
         "codex" -> variant.codex
         "claude" -> variant.claude
         "opencode" -> variant.open
@@ -103,6 +103,7 @@ object Renderer {
 
     /** Renders to a bitmap of exactly w×h px. The level is chosen to fit unless [forced]. */
     fun render(s: UiState, wPx: Int, hPx: Int, density: Float, pal: Palette, nowMs: Long, forced: Level? = null, rounded: Boolean = true): Bitmap {
+        if (pal.cupertino) return dev.usage.monitor.cupertino.CupertinoWidget.render(s, wPx, hPx, density, pal.dark, nowMs, glass = "tinted")
         val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val level = forced ?: pickLevel(s, hPx / density)

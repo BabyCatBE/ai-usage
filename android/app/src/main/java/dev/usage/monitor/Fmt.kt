@@ -43,7 +43,7 @@ object Fmt {
         val mins = (resetMs - nowMs + 59_999) / 60_000
         if (mins <= 0) return t("agora", "now")
         val d = mins / 1440; val h = mins % 1440 / 60; val m = mins % 60
-        return when { d > 0 -> "${d}d ${h}h"; h > 0 -> "${h}h ${m}min"; else -> "${m}min" }
+        return when { d > 0 -> if (h > 0) "${d}d ${h}h" else "${d}d"; h > 0 -> if (m > 0) "${h}h ${m}min" else "${h}h"; else -> "${m}min" }
     }
 
     /** "03:00" today, "ter 09:00" within a week, "12/11 09:00" beyond. */

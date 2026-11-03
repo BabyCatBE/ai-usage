@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cupertino look only. The root carries @android:id/background: One UI Home blurs the wallpaper behind it when its
+     background alpha is 1-254. The other looks keep widget.xml, unchanged. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#2E000000">
+    <ImageView android:id="@+id/image" android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitXY" />
+    <ImageButton android:id="@+id/refresh" android:layout_width="64dp" android:layout_height="64dp"
+        android:layout_gravity="top|end" android:background="@android:color/transparent"
+        android:contentDescription="@string/refresh" />
+</FrameLayout>

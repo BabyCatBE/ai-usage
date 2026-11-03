@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 
 namespace Usage.Core.Providers;
 
@@ -51,6 +51,10 @@ public sealed class ClaudeProvider : IUsageProvider
                 windows.Add(new UsageWindow(id, label, (double)w["utilization"]!, ParseDate(w["resets_at"]), mins));
         }
         Add("five_hour", "five_hour", "5h", 300);
+        // No message since the last reset: the API sends five_hour as null (or without utilization). That window is at 0 %,
+        // not missing; without it the UI would fall back to the weekly window.
+        if (windows.Count == 0 && limits.ContainsKey("five_hour") && (limits["seven_day"] as JsonObject)?["utilization"] is not null)
+            windows.Add(new UsageWindow("five_hour", "5h", 0, null, 300));
         Add("seven_day", "seven_day", "7d", 10080);
         Add("seven_day_opus", "seven_day_opus", "Opus 7d", 10080);
         Add("seven_day_sonnet", "seven_day_sonnet", "Sonnet 7d", 10080);

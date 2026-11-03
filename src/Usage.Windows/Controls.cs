@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Media;
 using Usage.Core;
 
@@ -49,6 +49,7 @@ public sealed class NeuBar : ThemedElement
         var pct = Math.Clamp(Value, 0, 100);
         if (Kind == "segments") { Segments(dc, r, pct); return; }
         if (Theme.Cyber) { Neon(dc, r, pct); return; }
+        if (Theme.Cupertino) { Capsule(dc, r, pct); return; }
 
         var rad = r.Height / 2;
         var track = new LinearGradientBrush(Theme.Shade.WithAlpha(Theme.Dark ? (byte)255 : (byte)150), Theme.Base, 90);
@@ -63,6 +64,16 @@ public sealed class NeuBar : ThemedElement
         if (!Theme.Soft) dc.DrawRoundedRectangle(glow, null, new Rect(fill.X - 4, fill.Y - 4, fill.Width + 8, fill.Height + 8), rad + 4, rad + 4);
         var g = new LinearGradientBrush(Lighten(Accent, 0.3), Accent, 90); g.Freeze();
         dc.DrawRoundedRectangle(g, null, fill, rad - 1, rad - 1);
+    }
+
+    /// <summary>Cupertino: flat capsule track in the system fill, solid accent capsule (like an iOS progress view).</summary>
+    void Capsule(DrawingContext dc, Rect r, double pct)
+    {
+        var rad = r.Height / 2;
+        dc.DrawRoundedRectangle(Fill(Theme.Dark ? Color.FromArgb(0x5C, 0x78, 0x78, 0x80) : Color.FromArgb(0x33, 0x78, 0x78, 0x80)), null, r, rad, rad);
+        if (pct <= 0.2) return;
+        var w = Math.Max(r.Height, r.Width * pct / 100);
+        dc.DrawRoundedRectangle(Fill(Accent), null, new Rect(0, 0, Math.Min(w, r.Width), r.Height), rad, rad);
     }
 
     /// <summary>Cyberpunk: flat ink track with a neon outline, quarter ticks and a bright glowing fill.</summary>
@@ -127,7 +138,8 @@ public sealed class Ring : ThemedElement
         var c = new Point(ActualWidth / 2, ActualHeight / 2);
         var t = size > 44 ? Math.Max(5, size / 11) : Math.Max(3, size / 7);
         var rad = size / 2 - t / 2 - 0.5;
-        dc.DrawEllipse(null, new Pen(Fill(WithAlpha(Theme.Shade, Theme.Dark ? (byte)230 : (byte)110)), t), c, rad, rad);
+        var trackColor = Theme.Cupertino ? WithAlpha(Accent, Theme.Dark ? (byte)0x40 : (byte)0x30) : WithAlpha(Theme.Shade, Theme.Dark ? (byte)230 : (byte)110);
+        dc.DrawEllipse(null, new Pen(Fill(trackColor), t), c, rad, rad);
         if (!HasValue) return;
         var pct = Math.Clamp(Value, 0, 100);
         if (pct < 0.5) return;
@@ -139,6 +151,36 @@ public sealed class Ring : ThemedElement
         var arc = new PathGeometry([fig]);
         if (halo is not null) dc.DrawGeometry(null, halo, arc);
         dc.DrawGeometry(null, pen, arc);
+    }
+}
+
+/// <summary>Test option of the retracted widget: one concentric ring per window, outermost = first (shortest) window.</summary>
+public sealed class MultiRing : ThemedElement
+{
+    public IReadOnlyList<(double Percent, Color Accent)> Values { get; set; } = [];
+
+    protected override void OnRender(DrawingContext dc)
+    {
+        var size = Math.Min(ActualWidth, ActualHeight);
+        if (size <= 0 || Values.Count == 0) return;
+        var c = new Point(ActualWidth / 2, ActualHeight / 2);
+        var n = Math.Min(Values.Count, 4);
+        var t = Math.Max(2.2, size / (n * 4.2));
+        const double gap = 1.2;
+        for (var i = 0; i < n; i++)
+        {
+            var rad = size / 2 - t / 2 - 0.5 - i * (t + gap);
+            if (rad <= t) break;
+            var (pct, accent) = Values[i];
+            dc.DrawEllipse(null, new Pen(Fill(WithAlpha(Theme.Cupertino ? accent : Theme.Shade, Theme.Cupertino ? (byte)0x38 : Theme.Dark ? (byte)230 : (byte)110)), t), c, rad, rad);
+            pct = Math.Clamp(pct, 0, 100);
+            if (pct < 0.5) continue;
+            var pen = new Pen(Fill(accent), t) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+            if (pct >= 99.9) { dc.DrawEllipse(null, pen, c, rad, rad); continue; }
+            var a = -Math.PI / 2; var b = a + pct / 100 * 2 * Math.PI;
+            var fig = new PathFigure(new Point(c.X + rad * Math.Cos(a), c.Y + rad * Math.Sin(a)), [new ArcSegment(new Point(c.X + rad * Math.Cos(b), c.Y + rad * Math.Sin(b)), new Size(rad, rad), 0, pct > 50, SweepDirection.Clockwise, true)], false);
+            dc.DrawGeometry(null, pen, new PathGeometry([fig]));
+        }
     }
 }
 

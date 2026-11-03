@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 using Usage.Core;
 using Usage.Core.Link;
 using Usage.Core.Providers;
@@ -48,6 +48,19 @@ public class ParserTests
         Assert.Equal(2, r.Windows.Count);
         Assert.Equal(13.5, r.Windows[1].UsedPercent);
         Assert.Equal(["Claude Code", "Chats"], r.Models!.Select(m => m.Name));
+    }
+
+    [Fact]
+    public void Idle_five_hour_window_is_zero_not_missing()
+    {
+        var claude = ClaudeProvider.Parse(JsonNode.Parse("""
+          {"rate_limits_available":true,"rate_limits":{"five_hour":null,"seven_day":{"utilization":46,"resets_at":"2026-11-05T07:00:00Z"}}}
+          """));
+        Assert.Equal(["five_hour", "seven_day"], claude.Windows.Select(w => w.Id));
+        Assert.Equal(0, claude.Windows[0].UsedPercent);
+        var codex = CodexProvider.Parse(JsonNode.Parse("""{"rateLimits":{"primary":null,"secondary":{"usedPercent":95,"windowDurationMins":10080,"resetsAt":1793426161}}}"""));
+        Assert.Equal(["five_hour", "seven_day"], codex.Windows.Select(w => w.Id));
+        Assert.Equal(0, codex.Windows[0].UsedPercent);
     }
 
     [Fact]

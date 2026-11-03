@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -103,12 +103,26 @@ public static class Theme
     public static bool Glass { get; private set; }
     public static bool Cyber { get; private set; }
     public static bool Soft { get; private set; }
+    /// <summary>Apple-design look: system colours, Inter, glass cards; the only look that turns on real (DWM acrylic) blur.</summary>
+    public static bool Cupertino { get; private set; }
+    /// <summary>Cupertino with the desktop blurred behind the windows (off with power saver or Windows transparency off).</summary>
+    public static bool Acrylic { get; private set; }
+    /// <summary>Monochrome neumorphism: the soft look in pure greys, vibrant black (dark) or vibrant white (light).</summary>
+    public static bool Mono { get; private set; }
     public static bool PowerSaver { get; private set; }
     public static CyberVariant? Variant { get; private set; }
     public static Color Base, Light, Shade, Text, Dim, Highlight, Warn = Color.FromRgb(0xE6, 0xA2, 0x3C), Crit = Color.FromRgb(0xE5, 0x53, 0x4B);
     public static event Action? Changed;
 
-    public static Color Accent(string id) => Variant is { } v
+    public static Color Accent(string id) => Mono ? Text : Cupertino
+        ? id switch
+        {
+            "codex" => Dark ? Color.FromRgb(0x63, 0xE6, 0xE2) : Color.FromRgb(0x00, 0xC7, 0xBE),
+            "claude" => Dark ? Color.FromRgb(0xFF, 0x9F, 0x0A) : Color.FromRgb(0xFF, 0x95, 0x00),
+            "opencode" => Dark ? Color.FromRgb(0x5E, 0x5C, 0xE6) : Color.FromRgb(0x58, 0x56, 0xD6),
+            _ => Dark ? Color.FromRgb(0x0A, 0x84, 0xFF) : Color.FromRgb(0x00, 0x7A, 0xFF),
+        }
+        : Variant is { } v
         ? id switch
         {
             "codex" => v.Codex,
@@ -157,13 +171,21 @@ public static class Theme
         Variant = Cyber ? CyberVariant.Get(st.CyberVariant) : Soft ? CyberVariant.GetSoft(st.SoftVariant) : null;
         PowerSaver = st.PowerSaver;
         Glass = st.Style == "glass";
+        Cupertino = st.Style == "cupertino";
+        Mono = st.Style == "mono";
         Dark = Variant is not null ? Variant.Dark : st.Theme == "dark" || (st.Theme != "light" && SystemDark());   // each cyber sub-theme is either dark or light
         var opaque = Glass && ReduceTransparency();
+        Acrylic = Cupertino && !PowerSaver && !ReduceTransparency();
 
+        if (Mono) Text = Dark ? Colors.White : Colors.Black;   // Accent() returns the text colour in Mono
         Highlight = Accent("codex");
         Warn = Color.FromRgb(0xE6, 0xA2, 0x3C); Crit = Color.FromRgb(0xE5, 0x53, 0x4B);
         if (Soft) { var v = Variant!; Base = v.Base; Light = Mix(v.Base, Colors.White, v.Dark ? 0.06 : 0.55); Shade = v.Ink; Text = v.Text; Dim = v.Dim; Warn = v.Warn; Crit = v.Crit; Highlight = v.Primary; }
         else if (Cyber) { var v = Variant!; Base = v.Base; Light = v.Primary; Shade = v.Ink; Text = v.Text; Dim = v.Dim; Warn = v.Warn; Crit = v.Crit; Highlight = v.Primary; }
+        else if (Mono && Dark) { Base = Color.FromRgb(0x10, 0x10, 0x10); Light = Color.FromRgb(0x24, 0x24, 0x24); Shade = Colors.Black; Text = Colors.White; Dim = Color.FromRgb(0x9A, 0x9A, 0x9A); Highlight = Colors.White; Warn = Color.FromRgb(0xC8, 0xC8, 0xC8); Crit = Color.FromRgb(0xFF, 0x45, 0x3A); }
+        else if (Mono) { Base = Color.FromRgb(0xF2, 0xF2, 0xF2); Light = Colors.White; Shade = Color.FromRgb(0xC4, 0xC4, 0xC4); Text = Colors.Black; Dim = Color.FromRgb(0x5E, 0x5E, 0x5E); Highlight = Colors.Black; Warn = Color.FromRgb(0x44, 0x44, 0x44); Crit = Color.FromRgb(0xE0, 0x24, 0x1B); }
+        else if (Cupertino && Dark) { Base = Color.FromRgb(0x1C, 0x1C, 0x1E); Light = Color.FromRgb(0x3A, 0x3A, 0x3C); Shade = Colors.Black; Text = Colors.White; Dim = Color.FromRgb(0x98, 0x98, 0x9F); Highlight = Color.FromRgb(0x0A, 0x84, 0xFF); Warn = Color.FromRgb(0xFF, 0x9F, 0x0A); Crit = Color.FromRgb(0xFF, 0x45, 0x3A); }
+        else if (Cupertino) { Base = Color.FromRgb(0xF2, 0xF2, 0xF7); Light = Colors.White; Shade = Color.FromRgb(0xC7, 0xC7, 0xCC); Text = Colors.Black; Dim = Color.FromRgb(0x6C, 0x6C, 0x70); Highlight = Color.FromRgb(0x00, 0x7A, 0xFF); Warn = Color.FromRgb(0xFF, 0x95, 0x00); Crit = Color.FromRgb(0xFF, 0x3B, 0x30); }
         else if (Glass && Dark) { Base = Color.FromRgb(0x0B, 0x10, 0x24); Light = Color.FromRgb(0x6E, 0x80, 0xB0); Shade = Color.FromRgb(0x05, 0x08, 0x18); Text = Color.FromRgb(0xF2, 0xF6, 0xFF); Dim = Color.FromRgb(0xB8, 0xC6, 0xE4); }
         else if (Glass) { Base = Color.FromRgb(0xE9, 0xEE, 0xFA); Light = Colors.White; Shade = Color.FromRgb(0x8E, 0xA0, 0xC4); Text = Color.FromRgb(0x1B, 0x25, 0x3D); Dim = Color.FromRgb(0x4F, 0x5F, 0x80); }
         else if (Dark) { Base = Color.FromRgb(0x2A, 0x2E, 0x35); Light = Color.FromRgb(0x38, 0x3D, 0x46); Shade = Color.FromRgb(0x1B, 0x1E, 0x23); Text = Color.FromRgb(0xE9, 0xEC, 0xF2); Dim = Color.FromRgb(0x9A, 0xA3, 0xB2); }
@@ -173,6 +195,7 @@ public static class Theme
         r["BaseBrush"] = B(Base); r["TextBrush"] = B(Text); r["DimBrush"] = B(Dim); r["LightBrush"] = B(Light); r["ShadeBrush"] = B(Shade);
         r["WarnBrush"] = B(Warn); r["CritBrush"] = B(Crit); r["HighlightBrush"] = B(Highlight);
         r["CardSheen"] = null;
+        r["UiFont"] = Cupertino ? InterFont : SegoeFont;
         r["CardBorderThickness"] = new Thickness(1);
         r["CardRadius"] = new CornerRadius(20); r["DockRightRadius"] = new CornerRadius(20, 0, 0, 20); r["DockLeftRadius"] = new CornerRadius(0, 20, 20, 0);
         r["ButtonRadius"] = new CornerRadius(14); r["RoundRadius"] = new CornerRadius(20);
@@ -208,6 +231,22 @@ public static class Theme
             r["CardRadius"] = new CornerRadius(16); r["DockRightRadius"] = new CornerRadius(16, 0, 0, 16); r["DockLeftRadius"] = new CornerRadius(0, 16, 16, 0);
             r["ButtonRadius"] = new CornerRadius(11); r["RoundRadius"] = new CornerRadius(16);
             r["ShadowLight"] = null; r["ShadowDark"] = null; r["ShadowLightSm"] = null; r["ShadowDarkSm"] = null;
+        }
+        else if (Cupertino)
+        {
+            // Apple-style glass: the window shows the desktop through DWM acrylic under a faint aurora veil; each card is a
+            // translucent pane with a rim that catches the light and a sheen along its top edge. Without acrylic the aurora is opaque.
+            r["WindowBrush"] = CupertinoBackground(Dark, Acrylic);
+            r["CardBack"] = B(Dark ? Color.FromArgb(0x8C, 0x1C, 0x1C, 0x1E) : Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
+            r["CardFill"] = Grad(new Point(0, 0), new Point(1, 1), (Color.FromArgb(Dark ? (byte)0x1C : (byte)0x40, 255, 255, 255), 0), (Color.FromArgb(Dark ? (byte)0x06 : (byte)0x10, 255, 255, 255), 0.6), (Colors.Transparent, 1));
+            r["CardBorder"] = Grad(new Point(0, 0), new Point(1, 1), (Color.FromArgb(Dark ? (byte)0x8C : (byte)0xFF, 255, 255, 255), 0), (Color.FromArgb(Dark ? (byte)0x14 : (byte)0x50, 255, 255, 255), 0.45), (Color.FromArgb(Dark ? (byte)0x48 : (byte)0xC0, 255, 255, 255), 1));
+            r["CardSheen"] = Grad(new Point(0.5, 0), new Point(0.5, 1), (Color.FromArgb(Dark ? (byte)0x22 : (byte)0x55, 255, 255, 255), 0), (Colors.Transparent, 0.32));
+            r["CardBorderThickness"] = new Thickness(1);
+            r["CardRadius"] = new CornerRadius(22); r["DockRightRadius"] = new CornerRadius(22, 0, 0, 22); r["DockLeftRadius"] = new CornerRadius(0, 22, 22, 0);
+            r["ButtonRadius"] = new CornerRadius(100); r["RoundRadius"] = new CornerRadius(20);
+            r["ScrollThumb"] = B(A(Dark ? (byte)0x60 : (byte)0x50, Dim));
+            r["ShadowLight"] = null; r["ShadowLightSm"] = null; r["ShadowDarkSm"] = null;
+            r["ShadowDark"] = PowerSaver ? null : SoftShadow(Dark ? 0.45 : 0.14);
         }
         else if (Glass)
         {
@@ -267,6 +306,106 @@ public static class Theme
     // ---- window chrome (title bar + border) so a dark theme never shows a white frame ---------------------------
 
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+    [DllImport("dwmapi.dll")] static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref Margins margins);
+    [StructLayout(LayoutKind.Sequential)] struct Margins { public int Left, Right, Top, Bottom; }
+    const int DWMWA_SYSTEMBACKDROP_TYPE = 38, DWMSBT_NONE = 1, DWMSBT_TRANSIENTWINDOW = 3;
+    const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
+
+    static readonly FontFamily SegoeFont = new("Segoe UI Variable Text, Segoe UI");
+    static readonly FontFamily InterFont = new(new Uri("pack://application:,,,/"), "./Fonts/#Inter, Segoe UI Variable Text, Segoe UI");
+
+    static DropShadowEffect SoftShadow(double opacity)
+    {
+        var e = new DropShadowEffect { Color = Colors.Black, BlurRadius = 26, ShadowDepth = 6, Direction = 270, Opacity = opacity, RenderingBias = RenderingBias.Performance };
+        e.Freeze();
+        return e;
+    }
+
+    /// <summary>
+    /// Cupertino: real blur of what is behind the window (DWM acrylic system backdrop, Windows 11 22H2+). Other looks get the
+    /// plain backdrop back. Older systems ignore the attribute and keep the opaque aurora.
+    /// </summary>
+    static void ApplyBackdrop(Window w, IntPtr h)
+    {
+        var src = HwndSource.FromHwnd(h);
+        if (Acrylic)
+        {
+            if (src?.CompositionTarget is { } ct) ct.BackgroundColor = Colors.Transparent;
+            var m = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+            DwmExtendFrameIntoClientArea(h, ref m);
+            var t = DWMSBT_TRANSIENTWINDOW;
+            DwmSetWindowAttribute(h, DWMWA_SYSTEMBACKDROP_TYPE, ref t, 4);
+            var none = DWMWA_COLOR_NONE;
+            DwmSetWindowAttribute(h, DWMWA_CAPTION_COLOR, ref none, 4);
+        }
+        else
+        {
+            var t = DWMSBT_NONE;
+            DwmSetWindowAttribute(h, DWMWA_SYSTEMBACKDROP_TYPE, ref t, 4);
+            var m = new Margins();
+            DwmExtendFrameIntoClientArea(h, ref m);
+            if (src?.CompositionTarget is { } ct) ct.BackgroundColor = SystemColors.WindowColor;
+        }
+    }
+
+    [DllImport("user32.dll")] static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionData data);
+    [DllImport("user32.dll")] static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
+    [DllImport("user32.dll")] static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
+    [StructLayout(LayoutKind.Sequential)] struct AccentPolicy { public int AccentState, AccentFlags; public uint GradientColor; public int AnimationId; }
+    [StructLayout(LayoutKind.Sequential)] struct WindowCompositionData { public int Attribute; public IntPtr Data; public int SizeOfData; }
+    const int WCA_ACCENT_POLICY = 19, ACCENT_DISABLED = 0, ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
+
+    /// <summary>
+    /// Acrylic blur behind a layered (transparent) window such as the floating widget, clipped to its glass surface
+    /// [surface] in device pixels with [radius] corners. Pass Acrylic = false (other looks) to switch it off.
+    /// </summary>
+    public static void ApplyLayeredBlur(Window w, Rect surface, double radius)
+    {
+        var h = new WindowInteropHelper(w).Handle;
+        if (h == IntPtr.Zero) return;
+        try
+        {
+            var on = Acrylic;
+            var policy = new AccentPolicy { AccentState = on ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_DISABLED, GradientColor = on ? (Dark ? 0x30000000u : 0x30FFFFFFu) : 0 };
+            var size = Marshal.SizeOf<AccentPolicy>();
+            var ptr = Marshal.AllocHGlobal(size);
+            try
+            {
+                Marshal.StructureToPtr(policy, ptr, false);
+                var data = new WindowCompositionData { Attribute = WCA_ACCENT_POLICY, Data = ptr, SizeOfData = size };
+                SetWindowCompositionAttribute(h, ref data);
+            }
+            finally { Marshal.FreeHGlobal(ptr); }
+            if (on)
+            {
+                var d = (int)Math.Round(radius * 2);
+                SetWindowRgn(h, CreateRoundRectRgn((int)surface.Left, (int)surface.Top, (int)surface.Right + 1, (int)surface.Bottom + 1, d, d), true);
+            }
+            else SetWindowRgn(h, IntPtr.Zero, true);
+        }
+        catch { }
+    }
+
+    /// <summary>iOS 26-style colour fields. Over acrylic it is a faint veil (the blurred desktop shows through); otherwise opaque.</summary>
+    static Brush CupertinoBackground(bool dark, bool overAcrylic)
+    {
+        static RadialGradientBrush Glow(Color c, byte a) => new(Color.FromArgb(a, c.R, c.G, c.B), Color.FromArgb(0, c.R, c.G, c.B));
+        byte k(byte a) => overAcrylic ? (byte)(a * 0.55) : a;
+        var top = dark ? Color.FromRgb(0x06, 0x07, 0x0D) : Color.FromRgb(0xF5, 0xF2, 0xFA);
+        var bottom = dark ? Color.FromRgb(0x0A, 0x0C, 0x17) : Color.FromRgb(0xE9, 0xF1, 0xFB);
+        var baseA = overAcrylic ? (dark ? (byte)0x70 : (byte)0x60) : (byte)0xFF;
+        var bg = new LinearGradientBrush(A(baseA, top), A(baseA, bottom), 90);
+        var group = new DrawingGroup { ClipGeometry = new RectangleGeometry(new Rect(0, 0, 100, 100)) };
+        group.Children.Add(new GeometryDrawing(bg, null, new RectangleGeometry(new Rect(0, 0, 100, 100))));
+        group.Children.Add(new GeometryDrawing(Glow(dark ? Color.FromRgb(0x1E, 0x3A, 0x8A) : Color.FromRgb(0x8E, 0xC5, 0xFF), k(dark ? (byte)0xE0 : (byte)0x99)), null, new EllipseGeometry(new Point(18, 12), 62, 50)));
+        group.Children.Add(new GeometryDrawing(Glow(dark ? Color.FromRgb(0x6D, 0x28, 0xD9) : Color.FromRgb(0xC9, 0xA7, 0xFF), k(dark ? (byte)0xB0 : (byte)0x80)), null, new EllipseGeometry(new Point(92, 30), 55, 45)));
+        group.Children.Add(new GeometryDrawing(Glow(dark ? Color.FromRgb(0xBE, 0x18, 0x5D) : Color.FromRgb(0xFF, 0xB3, 0xC7), k(dark ? (byte)0x70 : (byte)0x66)), null, new EllipseGeometry(new Point(70, 78), 50, 40)));
+        group.Children.Add(new GeometryDrawing(Glow(dark ? Color.FromRgb(0x0E, 0x74, 0x90) : Color.FromRgb(0x9D, 0xF0, 0xE0), k(dark ? (byte)0x90 : (byte)0x7A)), null, new EllipseGeometry(new Point(10, 70), 58, 48)));
+        var brush = new DrawingBrush(group) { Stretch = Stretch.Fill, Viewbox = new Rect(0, 0, 100, 100), ViewboxUnits = BrushMappingMode.Absolute };
+        RenderOptions.SetCachingHint(brush, CachingHint.Cache);
+        brush.Freeze();
+        return brush;
+    }
     const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20, DWMWA_BORDER_COLOR = 34, DWMWA_CAPTION_COLOR = 35, DWMWA_TEXT_COLOR = 36;
     const int DWMWA_COLOR_DEFAULT = unchecked((int)0xFFFFFFFF);
 
@@ -287,6 +426,7 @@ public static class Theme
             DwmSetWindowAttribute(h, DWMWA_CAPTION_COLOR, ref cap, 4);
             DwmSetWindowAttribute(h, DWMWA_TEXT_COLOR, ref txt, 4);
             DwmSetWindowAttribute(h, DWMWA_BORDER_COLOR, ref border, 4);
+            ApplyBackdrop(w, h);
         }
         catch { }
     }

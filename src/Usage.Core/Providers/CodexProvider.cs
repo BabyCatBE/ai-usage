@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 
 namespace Usage.Core.Providers;
 
@@ -65,6 +65,9 @@ public sealed class CodexProvider : IUsageProvider
             windows.Add(new UsageWindow(id, label, (double)w["usedPercent"]!, FromEpoch(w["resetsAt"]), mins));
         }
         if (windows.Count == 0) throw new UsageException("USAGE_UNAVAILABLE");
+        // The 5-hour window is reported as null until it starts (nothing used since the reset): it is at 0 %, not missing.
+        if (bucket.ContainsKey("primary") && (bucket["primary"] is not JsonObject p0 || p0["usedPercent"] is null) && windows.All(w => w.Id != "five_hour") && windows.Any(w => w.Id == "seven_day"))
+            windows.Insert(0, new UsageWindow("five_hour", "5h", 0, null, 300));
         var details = new List<Detail>();
         if (bucket["credits"] is JsonObject c && c["hasCredits"]?.GetValue<bool>() == true)
             details.Add(new Detail("credits", c["unlimited"]?.GetValue<bool>() == true ? "unlimited" : c["balance"]?.ToString() ?? "0"));

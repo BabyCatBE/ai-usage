@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Usage.Core.Providers;
 
@@ -26,11 +26,13 @@ public sealed class Settings
     public int IntervalMinutes { get; set; } = 5;
     public string Language { get; set; } = "auto";   // auto | pt | en
     public string Theme { get; set; } = "auto";      // colour mode: auto | light | dark
-    public string Style { get; set; } = "neu";       // look: neu (neumorphism) | glass (liquid glass) | cyber (neon cyberpunk) | soft (muted, low-saturation)
+    public string Style { get; set; } = "neu";       // look: neu (neumorphism) | glass (liquid glass) | cyber (neon cyberpunk) | soft (muted, low-saturation) | cupertino (Apple design, real acrylic glass) | mono (monochrome neumorphism, vibrant black or white)
     public string RelayUrl { get; set; } = Defaults.Relay;
     public string WidgetEdge { get; set; } = "Right";   // Right | Left: docked to the middle of that screen edge
     public bool WidgetEnabled { get; set; } = true;
     public bool WidgetAlwaysOnTop { get; set; } = true;
+    /// <summary>Test option: the retracted widget shows every window as concentric rings (outer = shortest window).</summary>
+    public bool WidgetAllRings { get; set; } = false;
     public bool HideMissingProviders { get; set; } = true;
     public bool StartWithWindows { get; set; } = true;
     public bool ShowIcons { get; set; } = true;

@@ -35,8 +35,9 @@ public partial class FloatingWidget : Window
             var h = new WindowInteropHelper(this).Handle;
             SetWindowLong(h, GWL_EXSTYLE, GetWindowLong(h, GWL_EXSTYLE) | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
         };
-        SizeChanged += (_, _) => Reposition();
-        Loaded += (_, _) => Fit();
+        SizeChanged += (_, _) => { Reposition(); ApplyGlass(); };
+        Theme.Changed += () => Dispatcher.BeginInvoke(ApplyGlass);
+        Loaded += (_, _) => { Fit(); ApplyGlass(); };
         collapseTimer.Tick += (_, _) => { collapseTimer.Stop(); SetExpanded(false); };
         detailTimer.Tick += (_, _) => { detailTimer.Stop(); Detail.IsOpen = false; detailFor = null; };
         Detail.Placement = PlacementMode.Custom;
@@ -65,6 +66,20 @@ public partial class FloatingWidget : Window
     }
 
     bool DockedRight => state.Settings.WidgetEdge != "Left";
+
+    /// <summary>Cupertino: real acrylic blur behind the glass surface (clipped to it; the side against the screen edge stays square).</summary>
+    void ApplyGlass()
+    {
+        if (!IsLoaded || ActualWidth <= 0) return;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var m = Root.Margin;
+        const double radius = 22;
+        // extend past the docked edge so only the corners facing the screen interior are rounded
+        var left = DockedRight ? m.Left : -radius;
+        var right = DockedRight ? ActualWidth + radius : ActualWidth - m.Right;
+        var rect = new Rect(left * dpi.DpiScaleX, m.Top * dpi.DpiScaleY, (right - left) * dpi.DpiScaleX, (ActualHeight - m.Top - m.Bottom) * dpi.DpiScaleY);
+        Theme.ApplyLayeredBlur(this, rect, radius * dpi.DpiScaleX);
+    }
 
     public void ApplySettings()
     {
@@ -122,11 +137,16 @@ public partial class FloatingWidget : Window
         if (ps.Count == 0) Collapsed.Children.Add(new TextBlock { Text = state.Service.IsRefreshing ? "…" : "AI", Style = (Style)FindResource("Label"), FontWeight = FontWeights.Bold, Margin = new Thickness(8, 6, 8, 6) });
         foreach (var p in ps)
         {
-            var first = p.Windows.FirstOrDefault();
-            double? worst = p.Windows.Count == 0 ? null : p.Windows.Max(w => w.Percent);
-            var cell = new Grid { Width = 24, Height = 24, Margin = new Thickness(0, 3, 0, 3) };
-            cell.Children.Add(new Ring { Value = first?.Percent ?? 0, HasValue = first is not null, Accent = Theme.Level(worst, p.Accent) });
-            if (p.ShowIcon) cell.Children.Add(new ProviderIcon { IconId = p.IconId, Accent = p.Accent, Width = 12, Height = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+            // The ring is the 5-hour window when there is one (an idle 5 h window is 0 %, never replaced by the weekly one),
+            // coloured by that window's own level, not by the provider's worst window.
+            var shown = p.Windows.FirstOrDefault(w => w.Id == "five_hour") ?? p.Windows.FirstOrDefault();
+            var all = state.Settings.WidgetAllRings && p.Windows.Count > 1;
+            var size = all ? 30.0 : 24.0;
+            var cell = new Grid { Width = size, Height = size, Margin = new Thickness(0, 3, 0, 3) };
+            if (all) cell.Children.Add(new MultiRing { Values = p.Windows.Select(w => (w.Percent, w.Accent)).ToList() });
+            else cell.Children.Add(new Ring { Value = shown?.Percent ?? 0, HasValue = shown is not null, Accent = shown?.Accent ?? p.Accent });
+            var iconSize = all ? 10.0 : 12.0;
+            if (p.ShowIcon) cell.Children.Add(new ProviderIcon { IconId = p.IconId, Accent = p.Accent, Width = iconSize, Height = iconSize, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
             else cell.Children.Add(new System.Windows.Shapes.Ellipse { Width = 6, Height = 6, Fill = p.AccentBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
             Collapsed.Children.Add(cell);
         }

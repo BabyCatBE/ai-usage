@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:minWidth="250dp" android:minHeight="110dp"
     android:minResizeWidth="180dp" android:minResizeHeight="110dp"
     android:targetCellWidth="4" android:targetCellHeight="4"
@@ -8,4 +9,6 @@
     android:previewImage="@drawable/widget_preview"
     android:description="@string/widget_description"
     android:resizeMode="horizontal|vertical"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen"
+    app:widgetStyle="colorful"
+    app:widgetSize="wideSmall|medium|large|extraLarge|extraLargeLong" />
