@@ -24,6 +24,12 @@ public partial class FloatingWidget : Window
     readonly DispatcherTimer collapseTimer = new() { Interval = TimeSpan.FromMilliseconds(380) };
     readonly DispatcherTimer detailTimer = new() { Interval = TimeSpan.FromMilliseconds(220) };
     bool expanded, dirty;
+    /// <summary>Hover intent: a popup only opens once the pointer has rested on its trigger and the widget has finished growing/moving.</summary>
+    readonly DispatcherTimer showTimer = new() { Interval = TimeSpan.FromMilliseconds(110) };
+    readonly DispatcherTimer forecastTimer = new() { Interval = TimeSpan.FromMilliseconds(160) };
+    long settleUntil;
+    ProviderVM? pendingP; FrameworkElement? pendingBox;
+    FrameworkElement? pendingForecastWrap; ProviderVM? pendingForecastP;
     ProviderVM? detailFor, forecastFor;
     /// <summary>Stage 4: the forecast opens beside the detail popup, which stays visible.</summary>
     readonly Popup Forecast = new() { AllowsTransparency = true, StaysOpen = true, Focusable = false, Placement = PlacementMode.Custom, PopupAnimation = PopupAnimation.None };
@@ -45,7 +51,7 @@ public partial class FloatingWidget : Window
             pop.HorizontalOffset = h;
         }
     }
-    void CloseDetail() { ClosePopup(Detail); ClosePopup(Forecast); detailFor = null; forecastFor = null; }
+    void CloseDetail() { forecastTimer.Stop(); pendingForecastP = null; pendingForecastWrap = null; ClosePopup(Detail); ClosePopup(Forecast); detailFor = null; forecastFor = null; }
 
     /// <summary>Outer-rounded card (the side facing the screen edge is square): the widget, the detail and the forecast read as one connected strip.</summary>
     ContentControl PanelCard(UIElement content, bool outer = true)
@@ -91,6 +97,24 @@ public partial class FloatingWidget : Window
         // the pointer may be over the detail / forecast popup (a separate window): keep everything open while it is
         collapseTimer.Tick += (_, _) => { collapseTimer.Stop(); if (OverPopup) return; SetExpanded(false); };
         detailTimer.Tick += (_, _) => { detailTimer.Stop(); if (OverPopup) return; CloseDetail(); };
+        showTimer.Tick += (_, _) =>
+        {
+            showTimer.Stop();
+            if (pendingP is null || pendingBox is null) return;
+            if (!pendingBox.IsMouseOver || !expanded) { pendingP = null; pendingBox = null; return; }
+            if (Environment.TickCount64 < settleUntil) { showTimer.Start(); return; }   // still growing/moving: wait, then place against the final geometry
+            var (p, b) = (pendingP, pendingBox); pendingP = null; pendingBox = null;
+            ShowDetail(p, b);
+        };
+        forecastTimer.Tick += (_, _) =>
+        {
+            forecastTimer.Stop();
+            if (pendingForecastP is null || pendingForecastWrap is null) return;
+            var (p, w) = (pendingForecastP, pendingForecastWrap); pendingForecastP = null; pendingForecastWrap = null;
+            // only if this detail is still the one on screen and the pointer is really resting on it
+            if (!w.IsMouseOver || !ReferenceEquals(Detail.Child, w) || !ReferenceEquals(detailFor, p)) return;
+            if (state.Settings.WidgetForecast) ShowForecast(p);
+        };
         Forecast.CustomPopupPlacementCallback = PlaceForecast;
         Detail.Placement = PlacementMode.Custom;
         Detail.PopupAnimation = PopupAnimation.None;
@@ -173,11 +197,17 @@ public partial class FloatingWidget : Window
         expanded = value;
         Collapsed.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
         Expanded.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+        showTimer.Stop(); forecastTimer.Stop(); pendingP = null; pendingBox = null; pendingForecastP = null; pendingForecastWrap = null;
         if (!value) { detailTimer.Stop(); CloseDetail(); }
+        // the window resizes and moves a few frames from now: no popup may open until that is over
+        settleUntil = Environment.TickCount64 + 280;
         var fade = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(160)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         (value ? (UIElement)Expanded : Collapsed).BeginAnimation(OpacityProperty, fade);
         Rebuild();
         Fit();
+        UpdateLayout();   // apply the new size/position now, not a frame later
+        Fit();
+        if (!value) { Detail.IsOpen = false; Forecast.IsOpen = false; }   // never leave a stale popup over the shrunken widget
     }
 
     // ---- content -------------------------------------------------------------------------------------------
@@ -248,12 +278,28 @@ public partial class FloatingWidget : Window
             stack.Children.Add(g);
         }
         box.Child = stack;
-        box.MouseEnter += (_, _) => { detailTimer.Stop(); box.Background = (Brush)FindResource("ShadeBrush"); ShowDetail(p, box); };
-        box.MouseLeave += (_, _) => { box.Background = Brushes.Transparent; detailTimer.Start(); };
+        box.MouseEnter += (_, _) =>
+        {
+            detailTimer.Stop(); box.Background = (Brush)FindResource("ShadeBrush");
+            if (ReferenceEquals(detailFor, p) && Detail.IsOpen) return;   // already showing this provider
+            pendingP = p; pendingBox = box; showTimer.Stop(); showTimer.Start();
+        };
+        box.MouseLeave += (_, _) =>
+        {
+            box.Background = Brushes.Transparent; detailTimer.Start();
+            if (ReferenceEquals(pendingBox, box)) { showTimer.Stop(); pendingP = null; pendingBox = null; }
+        };
         return box;
     }
 
     FrameworkElement? detailTarget;
+
+    static double MeasuredWidth(Popup pop)
+    {
+        if (pop.Child is not FrameworkElement c) return 332;
+        c.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return c.DesiredSize.Width > 0 ? c.DesiredSize.Width : 332;
+    }
 
     /// <summary>Beside the hovered row, clamped to the work area so it never slides over the widget itself.</summary>
     CustomPopupPlacement[] PlaceDetail(Size popup, Size target, Point offset)
@@ -264,7 +310,9 @@ public partial class FloatingWidget : Window
         var surfTop = Surface.PointToScreen(new Point(0, 0)).Y / m.M22;
         var rowTop = detailTarget is { IsLoaded: true } t ? t.PointToScreen(new Point(0, 0)).Y / m.M22 : surfTop;
         var y = Math.Min(Math.Max(rowTop, wa.Top), Math.Max(wa.Top, wa.Bottom - popup.Height)) - surfTop;
-        var x = DockedRight ? -popup.Width + 16 : target.Width - 16;   // card edge flush with the widget
+        // popup.Size can be 0 / stale while the popup is being (re)placed (its child was just swapped): measure the content ourselves
+        var pw = popup.Width > 40 ? popup.Width : MeasuredWidth(Detail);
+        var x = DockedRight ? -pw + 16 : target.Width - 16;   // card edge flush with the widget
         return [new CustomPopupPlacement(new Point(x, y), PopupPrimaryAxis.None)];
     }
 
@@ -278,8 +326,9 @@ public partial class FloatingWidget : Window
         var surfLeft = Surface.PointToScreen(new Point(0, 0)).X / m.M11;
         var rowTop = detailTarget is { IsLoaded: true } t ? t.PointToScreen(new Point(0, 0)).Y / m.M22 : surfTop;
         var y = Math.Min(Math.Max(rowTop, wa.Top), Math.Max(wa.Top, wa.Bottom - popup.Height)) - surfTop;
-        var detailW = Detail.Child is { } c ? (c.DesiredSize.Width > 0 ? c.DesiredSize.Width : 332) : 332;
-        var x = DockedRight ? -(detailW + popup.Width) + 48 : target.Width + detailW - 48;   // forecast card edge flush with the detail card edge (16 px margin each side; the detail itself is shifted 16)
+        var detailW = MeasuredWidth(Detail);
+        var fw = popup.Width > 40 ? popup.Width : MeasuredWidth(Forecast);
+        var x = DockedRight ? -(detailW + fw) + 48 : target.Width + detailW - 48;   // forecast card edge flush with the detail card edge (16 px margin each side; the detail itself is shifted 16)
         if (DockedRight) x = Math.Max(x, wa.Left - surfLeft);   // never past the left edge of the screen
         return [new CustomPopupPlacement(new Point(x, y), PopupPrimaryAxis.None)];
     }
@@ -288,7 +337,9 @@ public partial class FloatingWidget : Window
     {
         if (ReferenceEquals(detailFor, p) && Detail.IsOpen) return;   // same provider: the detail (and its forecast) stay as they are
         detailFor = p;
-        forecastFor = null; ClosePopup(Forecast);
+        forecastFor = null; forecastTimer.Stop(); pendingForecastP = null; pendingForecastWrap = null;
+        Forecast.IsOpen = false;   // immediately, not through the fade: a half-faded forecast must not linger over the new detail
+        Fit(); UpdateLayout();     // fresh geometry for the placement callback
         detailTarget = target;
         var s = new StackPanel { Width = 300 };
         s.Children.Add(new TextBlock { Text = p.Name + (p.Plan is null ? "" : " · " + p.Plan), FontSize = 16, FontWeight = FontWeights.Bold, Style = (Style)FindResource("Label"), Margin = new Thickness(0, 0, 0, 4) });
@@ -334,8 +385,17 @@ public partial class FloatingWidget : Window
         var dcard = PanelCard(s);
         var dback = Backing();
         var wrap = HitArea(dcard, dback);
-        wrap.MouseEnter += (_, _) => { collapseTimer.Stop(); detailTimer.Stop(); if (state.Settings.WidgetForecast) ShowForecast(p); };
-        wrap.MouseLeave += (_, _) => { if (ReferenceEquals(Detail.Child, wrap)) { detailTimer.Start(); collapseTimer.Start(); } };
+        wrap.MouseEnter += (_, _) =>
+        {
+            collapseTimer.Stop(); detailTimer.Stop();
+            if (!state.Settings.WidgetForecast || (ReferenceEquals(forecastFor, p) && Forecast.IsOpen)) return;
+            pendingForecastP = p; pendingForecastWrap = wrap; forecastTimer.Stop(); forecastTimer.Start();
+        };
+        wrap.MouseLeave += (_, _) =>
+        {
+            if (ReferenceEquals(pendingForecastWrap, wrap)) { forecastTimer.Stop(); pendingForecastP = null; pendingForecastWrap = null; }
+            if (ReferenceEquals(Detail.Child, wrap)) { detailTimer.Start(); collapseTimer.Start(); }
+        };
         detailCard = dcard; detailBacking = dback;
         OpenPopup(Detail, wrap, 26);
     }
