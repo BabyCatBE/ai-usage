@@ -33,6 +33,8 @@ public sealed class Settings
     public bool WidgetAlwaysOnTop { get; set; } = true;
     /// <summary>Test option: the retracted widget shows every window as concentric rings (outer = shortest window).</summary>
     public bool WidgetAllRings { get; set; } = false;
+    /// <summary>Beta: stage 4 of the widget, the usage forecast that opens beside the detail report.</summary>
+    public bool WidgetForecast { get; set; } = true;
     public bool HideMissingProviders { get; set; } = true;
     public bool StartWithWindows { get; set; } = true;
     public bool ShowIcons { get; set; } = true;

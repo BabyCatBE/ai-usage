@@ -37,7 +37,7 @@ class Store(context: Context) {
         get() = prefs.getString("style", null) ?: if (prefs.getString("theme", "") == "glass") "glass" else "neu"
         set(v) { prefs.edit().putString("style", v).apply() }
 
-    /** Cupertino widget glass, as on iOS 26: clear (wallpaper shows through) | tinted (more contrast). */
+    /** Cupertino widget glass: clear (wallpaper shows through, white content) | tinted (more contrast). */
     var widgetGlass: String
         get() = prefs.getString("widgetGlass", null)?.takeIf { it == "clear" || it == "tinted" } ?: "clear"
         set(v) { prefs.edit().putString("widgetGlass", v).apply() }
@@ -68,6 +68,11 @@ class Store(context: Context) {
     fun icon(provider: String): String = prefs.getString("icon_$provider", null)?.takeIf { id -> Icons.options(provider).any { it.id == id } } ?: Icons.default(provider)
     fun setIcon(provider: String, id: String) { prefs.edit().putString("icon_$provider", id).apply() }
     val icons: Map<String, String> get() = Icons.providers.associate { it.first to icon(it.first) }
+
+    /** Cupertino widget: draw the rings and icon tiles in each AI's colour, whatever the glass style (clear glass keeps its transparency). */
+    var widgetColorRings: Boolean
+        get() = prefs.getBoolean("widgetColorRings", false)
+        set(v) { prefs.edit().putBoolean("widgetColorRings", v).apply() }
 
     /** The UI thread (live link) and SyncWorker both save: serialise the read-modify-write of the history. */
     fun save(raw: String) = synchronized(Store::class.java) {

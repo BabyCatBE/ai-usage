@@ -24,7 +24,7 @@ import kotlin.math.min
 object CupertinoWidget {
     /** Tint the launcher lays over its wallpaper blur (alpha 1-254 keeps the blur on). */
     fun launcherTint(dark: Boolean, glass: String, lightWallpaper: Boolean = false): Int = when {
-        glass == "clear" -> if (lightWallpaper) 0x55000000 else 0x2E000000
+        glass == "clear" -> if (lightWallpaper) 0x66000000 else 0x45000000   // still see-through, dense enough for white text on a busy wallpaper
         dark -> 0x9E1C1C1E.toInt()
         else -> 0xA6F5F5F7.toInt()
     }
@@ -38,7 +38,7 @@ object CupertinoWidget {
         }
     } catch (_: Exception) { false }
 
-    private class Look(dark: Boolean, glass: String) {
+    private class Look(dark: Boolean, glass: String, val colorRings: Boolean) {
         val clear = glass == "clear"
         val t = Tokens(dark = clear || dark)
         val fg = if (clear || dark) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()
@@ -46,7 +46,8 @@ object CupertinoWidget {
         val fg3 = alpha(fg, if (clear) 0.52f else 0.36f)
         val fill = alpha(fg, if (clear) 0.16f else 0.08f)
         val shadow = clear
-        fun accent(id: String) = if (clear) 0xFFFFFFFF.toInt() else t.accent(id)
+        /** Clear glass draws white rings unless the user turned on coloured rings (then they take each AI's own colour). */
+        fun accent(id: String) = if (clear && !colorRings) 0xFFFFFFFF.toInt() else t.accent(id)
         fun level(p: Double?, id: String): Int {
             val a = accent(id)
             return when { p == null -> a; p >= 90 -> t.red; p >= 75 -> if (clear) t.yellow else t.orange; else -> a }
@@ -54,12 +55,12 @@ object CupertinoWidget {
     }
 
     /** Call [Type.init] first so the text is set in Inter. */
-    fun render(s: UiState, wPx: Int, hPx: Int, density: Float, dark: Boolean, nowMs: Long, glass: String, cornerDp: Float = 24f): Bitmap {
+    fun render(s: UiState, wPx: Int, hPx: Int, density: Float, dark: Boolean, nowMs: Long, glass: String, cornerDp: Float = 24f, colorRings: Boolean = false): Bitmap {
         val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         c.scale(density, density)
         val w = wPx / density; val h = hPx / density
-        val ink = Look(dark, glass)
+        val ink = Look(dark, glass, colorRings)
         glassBody(c, w, h, cornerDp, ink, dark)
         val ps = Renderer.visible(s)
         refreshButton(c, w, s, ink)
@@ -99,7 +100,7 @@ object CupertinoWidget {
     private const val PAD = 18f
 
     private fun paint(style: Type.Style, color: Int, ink: Look, weight: Int = style.weight, tabular: Boolean = false, size: Float = style.size) =
-        Type.paint(style, color, weight, tabular, size).apply { if (ink.shadow) setShadowLayer(1.6f, 0f, 0.4f, 0x40000000) }
+        Type.paint(style, color, weight, tabular, size).apply { if (ink.shadow) setShadowLayer(2.4f, 0f, 0.6f, 0x66000000) }
 
     private fun refreshButton(c: Canvas, w: Float, s: UiState, ink: Look) {
         val (cx, cy) = Renderer.refreshCenter(w)
@@ -123,10 +124,11 @@ object CupertinoWidget {
     }
 
     private fun tile(c: Canvas, x: Float, cy: Float, size: Float, p: Provider, s: UiState, ink: Look) {
-        val accent = if (ink.clear) ink.fill else ink.t.accent(p.id)
+        val coloured = !ink.clear || ink.colorRings
+        val accent = if (coloured) ink.t.tile(p.id) else ink.fill
         val path = Squircle.path(RectF(x, cy - size / 2, x + size, cy + size / 2), size * 0.25f)
         c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent })
-        Icons.draw(c, s.icons[p.id] ?: Icons.default(p.id), x + size / 2, cy, size * 0.36f, -1, eye = if (ink.clear) 0xFF3A3A3C.toInt() else accent)
+        Icons.draw(c, s.icons[p.id] ?: Icons.default(p.id), x + size / 2, cy, size * 0.36f, -1, eye = if (coloured) accent else 0xFF3A3A3C.toInt())
     }
 
     private fun large(c: Canvas, w: Float, h: Float, ps: List<Provider>, s: UiState, ink: Look, now: Long) {

@@ -201,4 +201,38 @@ public class ServiceTests
         }
         finally { Directory.Delete(dir, true); }
     }
+
+    static HistoryPoint Pt(DateTimeOffset now, int minAgo, double pct) => new(now - TimeSpan.FromMinutes(minAgo), pct);
+
+    [Fact]
+    public void Forecast_projects_run_out_at_the_pace_of_the_last_hour()
+    {
+        var now = new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero);
+        // 20 % an hour ago, 50 % now: 30 %/h, the remaining 50 % lasts 100 minutes (reset in 3 h)
+        var r = Forecast.Project([Pt(now, 70, 15), Pt(now, 60, 20), Pt(now, 30, 35), Pt(now, 0, 50)], 50, now.AddHours(3), now)!;
+        Assert.Equal(30, r.PerHour, 2);
+        Assert.Equal(now.AddMinutes(100), r.RunsOutAt);
+        Assert.Null(r.AtResetPercent);
+    }
+
+    [Fact]
+    public void Forecast_reports_percent_at_reset_when_it_lasts_and_ignores_pre_reset_samples()
+    {
+        var now = new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero);
+        var lasts = Forecast.Project([Pt(now, 60, 40), Pt(now, 0, 45)], 45, now.AddHours(2), now)!;
+        Assert.Null(lasts.RunsOutAt);
+        Assert.Equal(55, lasts.AtResetPercent!.Value, 2);
+        var afterReset = Forecast.Project([Pt(now, 60, 90), Pt(now, 20, 2), Pt(now, 0, 6)], 6, now.AddHours(5), now)!;
+        Assert.Equal(20, afterReset.BasisMinutes);
+        Assert.Equal(12, afterReset.PerHour, 2);
+    }
+
+    [Fact]
+    public void Forecast_needs_history_and_fresh_readings()
+    {
+        var now = new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero);
+        Assert.Null(Forecast.Project([Pt(now, 5, 3), Pt(now, 0, 4)], 4, now.AddHours(1), now));
+        Assert.Null(Forecast.Project([Pt(now, 90, 3), Pt(now, 40, 4)], 4, now.AddHours(1), now));   // latest reading is 40 min old
+        Assert.Equal(0, Forecast.Project([Pt(now, 60, 4), Pt(now, 0, 4)], 4, now.AddHours(1), now)!.PerHour);
+    }
 }

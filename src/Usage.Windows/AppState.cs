@@ -5,7 +5,7 @@ using Usage.Core.Providers;
 
 namespace Usage.Windows;
 
-public sealed record WindowVM(string Id, string Label, string ShortLabel, double Percent, string PercentText, Color Accent, string Countdown, string ResetClock, double Elapsed, bool HasElapsed, string ViewStyle = "bars", bool ShowReset = true)
+public sealed record WindowVM(string Id, string Label, string ShortLabel, double Percent, string PercentText, Color Accent, string Countdown, string ResetClock, double Elapsed, bool HasElapsed, string ViewStyle = "bars", bool ShowReset = true, DateTimeOffset? ResetsAt = null)
 {
     public string BarKind => ViewStyle == "segments" ? "segments" : "bar";
     public Brush AccentBrush { get { var b = new SolidColorBrush(Accent); b.Freeze(); return b; } }
@@ -115,7 +115,7 @@ public sealed class AppState : IDisposable
                 elapsed = Math.Clamp(1 - (r - now).TotalMinutes / d, 0, 1); has = true;
             }
             return new WindowVM(w.Id, Loc.WindowName(w.Id, w.Label), Loc.WindowName(w.Id, w.Label, true), Math.Min(pct, 100), Loc.Percent(pct),
-                Theme.Level(pct, accent), Loc.Countdown(w.ResetsAt, now), Loc.ResetAt(w.ResetsAt, now), elapsed, has, FitLevel >= 2 ? "mini" : Settings.ViewStyle, Settings.ShowResetLine && FitLevel < 2);
+                Theme.Level(pct, accent), Loc.Countdown(w.ResetsAt, now), Loc.ResetAt(w.ResetsAt, now), elapsed, has, FitLevel >= 2 ? "mini" : Settings.ViewStyle, Settings.ShowResetLine && FitLevel < 2, w.ResetsAt);
         }).ToList();
 
         string? notice = p.Status switch

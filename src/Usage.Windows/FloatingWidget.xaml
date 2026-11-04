@@ -11,6 +11,6 @@
                 <StackPanel x:Name="Expanded" Margin="16,12" Visibility="Collapsed" Width="300"/>
             </Grid>
         </ContentControl>
-        <Popup x:Name="Detail" AllowsTransparency="True" PopupAnimation="Fade" StaysOpen="True" IsHitTestVisible="False" Focusable="False"/>
+        <Popup x:Name="Detail" AllowsTransparency="True" PopupAnimation="Fade" StaysOpen="True" Focusable="False"/>
     </Grid>
 </Window>

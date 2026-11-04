@@ -22,9 +22,58 @@ public partial class FloatingWidget : Window
 
     readonly AppState state;
     readonly DispatcherTimer collapseTimer = new() { Interval = TimeSpan.FromMilliseconds(380) };
-    readonly DispatcherTimer detailTimer = new() { Interval = TimeSpan.FromMilliseconds(140) };
+    readonly DispatcherTimer detailTimer = new() { Interval = TimeSpan.FromMilliseconds(220) };
     bool expanded, dirty;
-    ProviderVM? detailFor;
+    ProviderVM? detailFor, forecastFor;
+    /// <summary>Stage 4: the forecast opens beside the detail popup, which stays visible.</summary>
+    readonly Popup Forecast = new() { AllowsTransparency = true, StaysOpen = true, Focusable = false, Placement = PlacementMode.Custom, PopupAnimation = PopupAnimation.None };
+    bool OverPopup => (Detail.IsOpen && Detail.Child is { IsMouseOver: true }) || (Forecast.IsOpen && Forecast.Child is { IsMouseOver: true });
+    ContentControl? detailCard;
+    Border? detailBacking;
+
+    /// <summary>
+    /// The popups are placed once, when they open. The widget grows (retracted -> expanded) a moment later, which used to leave an
+    /// already-open detail drawn over the expanded panel: every size/position change of the widget places them again.
+    /// </summary>
+    void RePlacePopups()
+    {
+        foreach (var pop in new[] { Detail, Forecast })
+        {
+            if (!pop.IsOpen) continue;
+            var h = pop.HorizontalOffset;
+            pop.HorizontalOffset = h + 1;   // any offset change makes WPF run the custom placement again
+            pop.HorizontalOffset = h;
+        }
+    }
+    void CloseDetail() { ClosePopup(Detail); ClosePopup(Forecast); detailFor = null; forecastFor = null; }
+
+    /// <summary>Outer-rounded card (the side facing the screen edge is square): the widget, the detail and the forecast read as one connected strip.</summary>
+    ContentControl PanelCard(UIElement content, bool outer = true)
+    {
+        var tpl = outer ? (DockedRight ? "DockRightTemplate" : "DockLeftTemplate") : "FlatTemplate";
+        return new ContentControl { Style = (Style)FindResource("Card"), Template = (ControlTemplate)FindResource(tpl), Content = content, Margin = new Thickness(16) };
+    }
+
+    /// <summary>Fades a popup out before closing it (an instant close looks abrupt next to the slide-in).</summary>
+    static void ClosePopup(Popup pop)
+    {
+        if (!pop.IsOpen) return;
+        if (pop.Child is not FrameworkElement el) { pop.IsOpen = false; return; }
+        var a = new DoubleAnimation(0, TimeSpan.FromMilliseconds(130)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
+        a.Completed += (_, _) => { if (ReferenceEquals(pop.Child, el) && el.Opacity <= 0.01) pop.IsOpen = false; };
+        el.BeginAnimation(OpacityProperty, a);
+    }
+
+    /// <summary>Content eases in while sliding out from under the panel it is attached to.</summary>
+    void SlideIn(FrameworkElement el, double distance)
+    {
+        var from = DockedRight ? distance : -distance;
+        var tt = new TranslateTransform(from, 0);
+        el.RenderTransform = tt;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        el.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { EasingFunction = ease });
+        tt.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(from, 0, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease });
+    }
 
     public FloatingWidget(AppState state)
     {
@@ -35,11 +84,14 @@ public partial class FloatingWidget : Window
             var h = new WindowInteropHelper(this).Handle;
             SetWindowLong(h, GWL_EXSTYLE, GetWindowLong(h, GWL_EXSTYLE) | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
         };
-        SizeChanged += (_, _) => { Reposition(); ApplyGlass(); };
+        SizeChanged += (_, _) => { Reposition(); ApplyGlass(); RePlacePopups(); };
+        LocationChanged += (_, _) => RePlacePopups();
         Theme.Changed += () => Dispatcher.BeginInvoke(ApplyGlass);
         Loaded += (_, _) => { Fit(); ApplyGlass(); };
-        collapseTimer.Tick += (_, _) => { collapseTimer.Stop(); SetExpanded(false); };
-        detailTimer.Tick += (_, _) => { detailTimer.Stop(); Detail.IsOpen = false; detailFor = null; };
+        // the pointer may be over the detail / forecast popup (a separate window): keep everything open while it is
+        collapseTimer.Tick += (_, _) => { collapseTimer.Stop(); if (OverPopup) return; SetExpanded(false); };
+        detailTimer.Tick += (_, _) => { detailTimer.Stop(); if (OverPopup) return; CloseDetail(); };
+        Forecast.CustomPopupPlacementCallback = PlaceForecast;
         Detail.Placement = PlacementMode.Custom;
         Detail.PopupAnimation = PopupAnimation.None;
         Detail.CustomPopupPlacementCallback = PlaceDetail;
@@ -121,7 +173,7 @@ public partial class FloatingWidget : Window
         expanded = value;
         Collapsed.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
         Expanded.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
-        if (!value) { detailTimer.Stop(); Detail.IsOpen = false; detailFor = null; }
+        if (!value) { detailTimer.Stop(); CloseDetail(); }
         var fade = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(160)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         (value ? (UIElement)Expanded : Collapsed).BeginAnimation(OpacityProperty, fade);
         Rebuild();
@@ -212,14 +264,31 @@ public partial class FloatingWidget : Window
         var surfTop = Surface.PointToScreen(new Point(0, 0)).Y / m.M22;
         var rowTop = detailTarget is { IsLoaded: true } t ? t.PointToScreen(new Point(0, 0)).Y / m.M22 : surfTop;
         var y = Math.Min(Math.Max(rowTop, wa.Top), Math.Max(wa.Top, wa.Bottom - popup.Height)) - surfTop;
-        var x = DockedRight ? -popup.Width : target.Width;
+        var x = DockedRight ? -popup.Width + 16 : target.Width - 16;   // card edge flush with the widget
+        return [new CustomPopupPlacement(new Point(x, y), PopupPrimaryAxis.None)];
+    }
+
+    /// <summary>Beside the detail popup (one step further from the screen edge), at the same height, clamped to the work area.</summary>
+    CustomPopupPlacement[] PlaceForecast(Size popup, Size target, Point offset)
+    {
+        var wa = SystemParameters.WorkArea;
+        var src = PresentationSource.FromVisual(Surface);
+        var m = src?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
+        var surfTop = Surface.PointToScreen(new Point(0, 0)).Y / m.M22;
+        var surfLeft = Surface.PointToScreen(new Point(0, 0)).X / m.M11;
+        var rowTop = detailTarget is { IsLoaded: true } t ? t.PointToScreen(new Point(0, 0)).Y / m.M22 : surfTop;
+        var y = Math.Min(Math.Max(rowTop, wa.Top), Math.Max(wa.Top, wa.Bottom - popup.Height)) - surfTop;
+        var detailW = Detail.Child is { } c ? (c.DesiredSize.Width > 0 ? c.DesiredSize.Width : 332) : 332;
+        var x = DockedRight ? -(detailW + popup.Width) + 48 : target.Width + detailW - 48;   // forecast card edge flush with the detail card edge (16 px margin each side; the detail itself is shifted 16)
+        if (DockedRight) x = Math.Max(x, wa.Left - surfLeft);   // never past the left edge of the screen
         return [new CustomPopupPlacement(new Point(x, y), PopupPrimaryAxis.None)];
     }
 
     void ShowDetail(ProviderVM p, FrameworkElement target)
     {
-        if (ReferenceEquals(detailFor, p) && Detail.IsOpen) return;
+        if (ReferenceEquals(detailFor, p) && Detail.IsOpen) return;   // same provider: the detail (and its forecast) stay as they are
         detailFor = p;
+        forecastFor = null; ClosePopup(Forecast);
         detailTarget = target;
         var s = new StackPanel { Width = 300 };
         s.Children.Add(new TextBlock { Text = p.Name + (p.Plan is null ? "" : " · " + p.Plan), FontSize = 16, FontWeight = FontWeights.Bold, Style = (Style)FindResource("Label"), Margin = new Thickness(0, 0, 0, 4) });
@@ -261,10 +330,119 @@ public partial class FloatingWidget : Window
         }
         s.Children.Add(new TextBlock { Text = p.UpdatedText, Style = (Style)FindResource("Dim"), FontSize = 10.5, Margin = new Thickness(0, 10, 0, 0) });
 
-        var card = new ContentControl { Style = (Style)FindResource("Card"), Content = s, Margin = new Thickness(16) };
-        Detail.Child = card;
-        Detail.PlacementTarget = Surface;
-        if (Detail.IsOpen) { Detail.IsOpen = false; }   // re-evaluate placement for the new row, without a visible gap (no fade)
-        Detail.IsOpen = true;
+        // stage 3 (detail). Pointer over it -> stage 4 (forecast); pointer away -> closes after a short grace period.
+        var dcard = PanelCard(s);
+        var dback = Backing();
+        var wrap = HitArea(dcard, dback);
+        wrap.MouseEnter += (_, _) => { collapseTimer.Stop(); detailTimer.Stop(); if (state.Settings.WidgetForecast) ShowForecast(p); };
+        wrap.MouseLeave += (_, _) => { if (ReferenceEquals(Detail.Child, wrap)) { detailTimer.Start(); collapseTimer.Start(); } };
+        detailCard = dcard; detailBacking = dback;
+        OpenPopup(Detail, wrap, 26);
+    }
+
+    /// <summary>The popup's shadow margin must be hit-testable (a nearly invisible fill) so the pointer can cross from one popup to the next without leaving them.</summary>
+    Border HitArea(UIElement card, Border backing)
+    {
+        var g = new Grid();
+        g.Children.Add(backing); g.Children.Add(card);
+        return new Border { Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)), Child = g };
+    }
+
+    /// <summary>
+    /// Popups are separate windows: nothing blurs what is behind them, so the glass card alone lets the text of the window underneath
+    /// show through and fight with the report. A dense backing in the theme colour keeps the glass look and makes it readable anywhere.
+    /// </summary>
+    Border Backing() => new()
+    {
+        Margin = new Thickness(16), IsHitTestVisible = false,
+        CornerRadius = (CornerRadius)FindResource(DockedRight ? "DockRightRadius" : "DockLeftRadius"),
+        Background = new SolidColorBrush(Color.FromArgb(0xE6, Theme.Base.R, Theme.Base.G, Theme.Base.B)),
+    };
+
+    void OpenPopup(Popup pop, FrameworkElement content, double slide)
+    {
+        pop.Child = content;
+        pop.PlacementTarget = Surface;
+        if (pop.IsOpen) { pop.IsOpen = false; }   // re-evaluate placement for the new content, without a visible gap (no fade)
+        pop.IsOpen = true;
+        SlideIn(content, slide);
+    }
+
+    // ---- stage 4: forecast (beta) -------------------------------------------------------------------------------
+
+    /// <summary>"If I keep using it like this": per window, when it runs out (or what is left at the reset) at the pace of the last hour.</summary>
+    void ShowForecast(ProviderVM p)
+    {
+        if (ReferenceEquals(forecastFor, p) && Forecast.IsOpen) return;
+        forecastFor = p;
+        if (detailCard is not null) detailCard.Template = (ControlTemplate)FindResource("FlatTemplate");
+        if (detailBacking is not null) detailBacking.CornerRadius = new CornerRadius(0);   // the detail now has a panel on each side
+        var now = DateTimeOffset.Now;
+        var s = new StackPanel { Width = 300 };
+        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 2) };
+        var beta = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(6, 1, 6, 1), Background = (Brush)FindResource("ShadeBrush"), VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock { Text = "BETA", FontSize = 9.5, FontWeight = FontWeights.Bold, Style = (Style)FindResource("Dim") } };
+        DockPanel.SetDock(beta, Dock.Right); head.Children.Add(beta);
+        head.Children.Add(new TextBlock { Text = Loc.T("Previsão · ", "Forecast · ") + p.Name, FontSize = 16, FontWeight = FontWeights.Bold, Style = (Style)FindResource("Label") });
+        s.Children.Add(head);
+        s.Children.Add(new TextBlock { Text = Loc.T("No ritmo da última hora", "At the pace of the last hour"), Style = (Style)FindResource("Dim"), FontSize = 11, Margin = new Thickness(0, 0, 0, 2) });
+
+        if (p.Windows.Count == 0)
+            s.Children.Add(new TextBlock { Text = p.Notice ?? "", Style = (Style)FindResource("Dim"), TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.None, Margin = new Thickness(0, 8, 0, 0) });
+        foreach (var w in p.Windows)
+        {
+            var f = Usage.Core.Forecast.Project(state.Service.History(p.Id, w.Id), w.Percent, w.ResetsAt, now);
+            var row = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+            string headline, note = "";
+            Brush hb = (Brush)FindResource("TextBrush");
+            double projected = w.Percent;
+            if (f is null) { headline = Loc.T("Coletando dados…", "Collecting data…"); hb = (Brush)FindResource("DimBrush"); note = Loc.T("Precisa de ~15 min de leituras desde o último reset.", "Needs ~15 min of readings since the last reset."); }
+            else if (f.PerHour <= 0) { headline = Loc.T("Sem uso recente", "No recent use"); note = Loc.T($"Nada gasto nos últimos {f.BasisMinutes} min.", $"Nothing used in the last {f.BasisMinutes} min."); }
+            else
+            {
+                var rate = (f.PerHour >= 10 ? $"+{f.PerHour:0}" : $"+{f.PerHour:0.0}") + Loc.T("%/h", "%/h");
+                if (f.RunsOutAt is { } out_)
+                {
+                    headline = Loc.T("Acaba em ~", "Runs out in ~") + Loc.Countdown(out_, now);
+                    hb = (Brush)FindResource("CritBrush"); projected = 100;
+                    note = Loc.T("às ", "at ") + out_.ToLocalTime().ToString("HH:mm") + " · " + rate;
+                }
+                else
+                {
+                    projected = f.AtResetPercent ?? w.Percent;
+                    headline = Loc.T($"Sobra ~{100 - projected:0}% no reset", $"~{100 - projected:0}% left at reset");
+                    note = Loc.T($"chega a ~{projected:0}% no reset · ", $"reaches ~{projected:0}% by the reset · ") + rate;
+                }
+            }
+            var pct = new TextBlock { Text = headline, FontWeight = FontWeights.Bold, FontSize = 13, Foreground = hb, Style = (Style)FindResource("Label") };
+            DockPanel.SetDock(pct, Dock.Right); row.Children.Add(pct);
+            row.Children.Add(new TextBlock { Text = w.Label, FontWeight = FontWeights.SemiBold, Style = (Style)FindResource("Label") });
+            s.Children.Add(row);
+            s.Children.Add(ProjectionBar(w, projected, f is not null));
+            if (note.Length > 0) s.Children.Add(new TextBlock { Text = note, Style = (Style)FindResource("Dim"), FontSize = 11, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.None });
+        }
+        var wrap = HitArea(PanelCard(s), Backing());
+        wrap.MouseLeave += (_, _) => { if (ReferenceEquals(Forecast.Child, wrap)) { detailTimer.Start(); collapseTimer.Start(); } };
+        wrap.MouseEnter += (_, _) => { collapseTimer.Stop(); detailTimer.Stop(); };
+        OpenPopup(Forecast, wrap, 48);
+    }
+
+    /// <summary>Track with the current usage filled solid and the projection up to the reset (or to 100 %) as a lighter extension.</summary>
+    FrameworkElement ProjectionBar(WindowVM w, double projected, bool has)
+    {
+        var now = Math.Clamp(w.Percent, 0, 100);
+        var end = has ? Math.Clamp(projected, now, 100) : now;
+        var track = new Border { Height = 8, CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 4, 0, 3), ClipToBounds = true, Background = (Brush)FindResource("ShadeBrush") };
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(now, 0.0001), GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(end - now, 0.0001), GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(100 - end, 0.0001), GridUnitType.Star) });
+        var solid = new Border { Background = w.AccentBrush };
+        var c = w.Accent;
+        var ext = new Border { Background = new SolidColorBrush(Color.FromArgb(0x70, c.R, c.G, c.B)) };
+        Grid.SetColumn(ext, 1);
+        g.Children.Add(solid); g.Children.Add(ext);
+        track.Child = g;
+        return track;
     }
 }

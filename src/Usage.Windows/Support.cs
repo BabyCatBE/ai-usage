@@ -237,7 +237,7 @@ public static class Theme
             // Apple-style glass: the window shows the desktop through DWM acrylic under a faint aurora veil; each card is a
             // translucent pane with a rim that catches the light and a sheen along its top edge. Without acrylic the aurora is opaque.
             r["WindowBrush"] = CupertinoBackground(Dark, Acrylic);
-            r["CardBack"] = B(Dark ? Color.FromArgb(0x8C, 0x1C, 0x1C, 0x1E) : Color.FromArgb(0xB0, 0xFF, 0xFF, 0xFF));
+            r["CardBack"] = B(Dark ? Color.FromArgb(0xE6, 0x1C, 0x1C, 0x1E) : Color.FromArgb(0xF0, 0xFF, 0xFF, 0xFF));
             r["CardFill"] = Grad(new Point(0, 0), new Point(1, 1), (Color.FromArgb(Dark ? (byte)0x1C : (byte)0x40, 255, 255, 255), 0), (Color.FromArgb(Dark ? (byte)0x06 : (byte)0x10, 255, 255, 255), 0.6), (Colors.Transparent, 1));
             r["CardBorder"] = Grad(new Point(0, 0), new Point(1, 1), (Color.FromArgb(Dark ? (byte)0x8C : (byte)0xFF, 255, 255, 255), 0), (Color.FromArgb(Dark ? (byte)0x14 : (byte)0x50, 255, 255, 255), 0.45), (Color.FromArgb(Dark ? (byte)0x48 : (byte)0xC0, 255, 255, 255), 1));
             r["CardSheen"] = Grad(new Point(0.5, 0), new Point(0.5, 1), (Color.FromArgb(Dark ? (byte)0x22 : (byte)0x55, 255, 255, 255), 0), (Colors.Transparent, 0.32));
@@ -366,7 +366,7 @@ public static class Theme
         try
         {
             var on = Acrylic;
-            var policy = new AccentPolicy { AccentState = on ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_DISABLED, GradientColor = on ? (Dark ? 0x30000000u : 0x30FFFFFFu) : 0 };
+            var policy = new AccentPolicy { AccentState = on ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_DISABLED, GradientColor = on ? (Dark ? 0xCC1E1C1Cu : 0xCCF7F2F2u) : 0 };
             var size = Marshal.SizeOf<AccentPolicy>();
             var ptr = Marshal.AllocHGlobal(size);
             try

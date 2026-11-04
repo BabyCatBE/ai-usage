@@ -366,7 +366,7 @@ class CupertinoScreen(private val act: Activity, private val store: Store, priva
             }
             body.addView(Section(act, t, tr("Aparência", "Appearance")).add(padded(seg)))
 
-            val looks = listOf("cupertino" to "Cupertino", "glass" to "Liquid glass", "neu" to "Neumorphism", "cyber" to "Cyberpunk", "soft" to tr("Suave", "Soft"))
+            val looks = listOf("cupertino" to "Cupertino", "glass" to "Liquid glass", "neu" to "Neumorphism", "mono" to "Mono", "cyber" to "Cyberpunk", "soft" to tr("Suave", "Soft"))
             val themeSection = Section(act, t, tr("Tema", "Theme"), tr("Cupertino usa vidro com refração em tempo real no app e o desfoque do papel de parede no widget. Gasta mais bateria que os outros temas.",
                 "Cupertino renders real-time refracting glass in the app and wallpaper blur in the widget. It uses more battery than the other themes."))
             for ((id, name) in looks) themeSection.add(Row(act, t, name, accessory = Row.Accessory.Check, onTap = {
@@ -379,9 +379,10 @@ class CupertinoScreen(private val act: Activity, private val store: Store, priva
             val wseg = SegmentedControl(act, t, listOf(tr("Transparente", "Clear"), tr("Tingido", "Tinted")), glassModes.indexOf(store.widgetGlass).coerceAtLeast(0)) { i ->
                 if (store.widgetGlass != glassModes[i]) { store.widgetGlass = glassModes[i]; actions.widgetChanged() }
             }
-            val widget = Section(act, t, "Widget", tr("O One UI desfoca o papel de parede atrás do widget. Transparente deixa as cores dele aparecerem; Tingido aumenta o contraste do texto.",
-                "One UI blurs your wallpaper behind the widget. Clear lets its colours through; Tinted adds contrast for the text."))
+            val widget = Section(act, t, "Widget", tr("O One UI desfoca o papel de parede atrás do widget. Transparente deixa as cores dele aparecerem; Tingido aumenta o contraste do texto. Anéis coloridos pintam cada IA com a sua cor, em qualquer estilo.",
+                "One UI blurs your wallpaper behind the widget. Clear lets its colours through; Tinted adds contrast for the text. Coloured rings paint each AI in its own colour, in either style."))
             widget.add(padded(wseg))
+            widget.add(Row(act, t, tr("Anéis coloridos", "Coloured Rings")).trailing(IosSwitch(act, t, store.widgetColorRings) { on -> store.widgetColorRings = on; actions.widgetChanged() }))
             if (store.pairing != null) widget.add(Row(act, t, tr("Adicionar à tela inicial", "Add to Home Screen"), titleColor = t.blue, onTap = { actions.pinWidget() }))
             body.addView(widget)
 

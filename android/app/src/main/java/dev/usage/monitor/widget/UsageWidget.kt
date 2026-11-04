@@ -61,7 +61,7 @@ class UsageWidget : AppWidgetProvider() {
                 val corner = (opts.get("semShapeRadius") as? Number)?.toFloat()?.takeIf { it > 0f } ?: 24f
                 // One UI scales widgets down (hsResizeRatio ~0.83): lay out for the size it is really shown at, so text keeps its point size.
                 val ratio = (opts.get("hsResizeRatio") as? Number)?.toFloat()?.takeIf { it in 0.5f..1f } ?: 1f
-                CupertinoWidget.render(state, wPx, hPx, density * k / ratio, pal.dark, now, store.widgetGlass, corner * ratio)
+                CupertinoWidget.render(state, wPx, hPx, density * k / ratio, pal.dark, now, store.widgetGlass, corner * ratio, store.widgetColorRings)
             } else Renderer.render(state, wPx, hPx, density * k, pal, now)
 
             val views = RemoteViews(context.packageName, if (pal.cupertino) R.layout.widget_cupertino else R.layout.widget)

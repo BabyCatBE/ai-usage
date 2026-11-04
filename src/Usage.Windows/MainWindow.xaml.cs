@@ -516,6 +516,7 @@ public partial class MainWindow : Window
         Check(Loc.T("Mostrar o widget no canto da tela", "Show the widget on a screen corner"), st.WidgetEnabled, v => st.WidgetEnabled = v);
         Choice(["Right", "Left"], [Loc.T("Borda direita", "Right edge"), Loc.T("Borda esquerda", "Left edge")], st.WidgetEdge, v => st.WidgetEdge = v);
         Check(Loc.T("Sempre sobre outras janelas", "Always on top"), st.WidgetAlwaysOnTop, v => st.WidgetAlwaysOnTop = v);
+        Check(Loc.T("Beta: previsão ao passar o mouse sobre o relatório detalhado", "Beta: forecast when hovering the detail report"), st.WidgetForecast, v => st.WidgetForecast = v);
         Check(Loc.T("Teste: todos os usos em anéis no widget retraído", "Test: every window as rings on the retracted widget"), st.WidgetAllRings, v => st.WidgetAllRings = v);
         Caption(Loc.T("Desempenho", "Performance"));
         ViewCheck(Loc.T("Modo economia: sem sombras/efeitos pesados, prioridade baixa", "Power saver: no heavy shadows/effects, low priority"), st.PowerSaver, v => st.PowerSaver = v);

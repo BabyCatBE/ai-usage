@@ -31,6 +31,15 @@
                 <ContentPresenter Margin="{TemplateBinding Padding}"/>
             </Grid>
         </ControlTemplate>
+        <!-- Both sides square: a panel that has another panel attached on each side (detail report while the forecast is open). -->
+        <ControlTemplate x:Key="FlatTemplate" TargetType="ContentControl">
+            <Grid>
+                <Border Background="{DynamicResource CardBack}" CornerRadius="0" Effect="{DynamicResource ShadowLight}"/>
+                <Border Background="{DynamicResource CardFill}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="{DynamicResource CardBorderThickness}" CornerRadius="0" Effect="{DynamicResource ShadowDark}"/>
+                <Border Background="{DynamicResource CardSheen}" CornerRadius="0" IsHitTestVisible="False"/>
+                <ContentPresenter Margin="{TemplateBinding Padding}"/>
+            </Grid>
+        </ControlTemplate>
         <Style x:Key="Card" TargetType="ContentControl">
             <Setter Property="Template" Value="{StaticResource RaisedTemplate}"/>
             <Setter Property="Padding" Value="{DynamicResource CardPadding}"/>
