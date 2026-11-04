@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -20,6 +20,11 @@ public sealed class SettingsList
 
     static SolidColorBrush B(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
     static Color A(byte a, Color c) => Color.FromArgb(a, c.R, c.G, c.B);
+    /// <summary>The card colour follows the look: iOS system fill (Cupertino), ink with a neon rim (Cyberpunk), a faint veil over the window (the rest).</summary>
+    internal static Brush CardFill() =>
+        Theme.Cupertino ? B(Theme.Dark ? Color.FromArgb(0xE6, 0x1C, 0x1C, 0x1E) : Color.FromArgb(0xF2, 0xFF, 0xFF, 0xFF))
+        : Theme.Cyber ? B(A(0xD7, Theme.Shade))
+        : B(Theme.Dark ? Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
     static Brush Text => B(Theme.Text);
     static Brush Dim => B(Theme.Dim);
     static FontFamily Font => (FontFamily)Application.Current.FindResource("UiFont");
@@ -29,13 +34,12 @@ public sealed class SettingsList
     /// <summary>Starts a section: header above, rows go into one rounded card.</summary>
     public void Section(string header)
     {
-        host.Children.Add(new TextBlock { Text = header.ToUpperInvariant(), FontFamily = Font, FontSize = 11.5, Foreground = Dim, Margin = new Thickness(16, 18, 0, 6) });
+        host.Children.Add(new TextBlock { Text = header.ToUpperInvariant(), FontFamily = Font, FontSize = 11.5, Foreground = Dim, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16, 18, 12, 6) });
         rows = new StackPanel();
         host.Children.Add(new Border
         {
-            CornerRadius = new CornerRadius(16), ClipToBounds = true, Child = rows,
-            Background = B(Theme.Dark ? Color.FromArgb(0xE6, 0x1C, 0x1C, 0x1E) : Color.FromArgb(0xF2, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = B(A(Theme.Dark ? (byte)0x30 : (byte)0x50, Theme.Dim)), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(Theme.Cyber ? 5 : 16), ClipToBounds = true, Child = rows,
+            Background = CardFill(), BorderBrush = Theme.Cyber ? B(A(0x80, Theme.Light)) : B(A(Theme.Dark ? (byte)0x30 : (byte)0x50, Theme.Dim)), BorderThickness = new Thickness(Theme.Cyber ? 1.5 : 1),
         });
     }
 
@@ -114,8 +118,8 @@ public sealed class IosSwitch : Border
 
     void Paint(bool animate)
     {
-        var off = Theme.Dark ? Color.FromRgb(0x39, 0x39, 0x3D) : Color.FromRgb(0xE9, 0xE9, 0xEA);
-        var green = Theme.Dark ? Color.FromRgb(0x30, 0xD1, 0x58) : Color.FromRgb(0x34, 0xC7, 0x59);
+        var off = Theme.Cupertino ? (Theme.Dark ? Color.FromRgb(0x39, 0x39, 0x3D) : Color.FromRgb(0xE9, 0xE9, 0xEA)) : Color.FromArgb(0x70, Theme.Dim.R, Theme.Dim.G, Theme.Dim.B);
+        var green = Theme.Cupertino ? (Theme.Dark ? Color.FromRgb(0x30, 0xD1, 0x58) : Color.FromRgb(0x34, 0xC7, 0x59)) : Theme.Highlight;
         Background = new SolidColorBrush(On ? green : off);
         var to = On ? 20.0 : 0.0;
         if (animate) move.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(to, TimeSpan.FromMilliseconds(220)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
@@ -128,7 +132,7 @@ public sealed class IosSwitch : Border
 /// <summary>iOS segmented control: capsule track, a thumb that slides to the chosen segment.</summary>
 public sealed class IosSegmented : Grid
 {
-    readonly Border thumb = new() { CornerRadius = new CornerRadius(14), Margin = new Thickness(2), HorizontalAlignment = HorizontalAlignment.Left };
+    readonly Border thumb = new() { CornerRadius = new CornerRadius(14), Margin = new Thickness(2), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
     readonly TranslateTransform move = new();
     readonly string[] labels;
     readonly Action<int> pick;
@@ -137,16 +141,16 @@ public sealed class IosSegmented : Grid
     public IosSegmented(string[] labels, int selected, Action<int> pick)
     {
         this.labels = labels; this.pick = pick; index = Math.Clamp(selected, 0, labels.Length - 1);
-        Height = 32; Cursor = Cursors.Hand; Background = Brushes.Transparent;
-        var track = new Border { CornerRadius = new CornerRadius(16), Background = new SolidColorBrush(Theme.Dark ? Color.FromArgb(0x3D, 0x76, 0x76, 0x80) : Color.FromArgb(0x1F, 0x76, 0x76, 0x80)) };
+        MinHeight = 32; Cursor = Cursors.Hand; Background = Brushes.Transparent;
+        var track = new Border { CornerRadius = new CornerRadius(16), Background = new SolidColorBrush(Theme.Cupertino ? (Theme.Dark ? Color.FromArgb(0x3D, 0x76, 0x76, 0x80) : Color.FromArgb(0x1F, 0x76, 0x76, 0x80)) : Color.FromArgb(0x38, Theme.Dim.R, Theme.Dim.G, Theme.Dim.B)) };
         Children.Add(track);
-        thumb.Background = new SolidColorBrush(Theme.Dark ? Color.FromRgb(0x63, 0x63, 0x66) : Colors.White);
+        thumb.Background = new SolidColorBrush(Theme.Cupertino ? (Theme.Dark ? Color.FromRgb(0x63, 0x63, 0x66) : Colors.White) : Color.FromArgb(0x55, Theme.Highlight.R, Theme.Highlight.G, Theme.Highlight.B));
         thumb.Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 4, ShadowDepth = 1, Direction = 270, Opacity = Theme.Dark ? 0.4 : 0.15, RenderingBias = RenderingBias.Performance };
         thumb.RenderTransform = move;
         Children.Add(thumb);
         var labelsGrid = new UniformGrid { Rows = 1, Columns = labels.Length };
         for (var i = 0; i < labels.Length; i++)
-            labelsGrid.Children.Add(new TextBlock { Text = labels[i], FontFamily = (FontFamily)Application.Current.FindResource("UiFont"), FontSize = 12.5, FontWeight = i == index ? FontWeights.SemiBold : FontWeights.Medium, Foreground = new SolidColorBrush(Theme.Text), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+            labelsGrid.Children.Add(new TextBlock { Text = labels[i], FontFamily = (FontFamily)Application.Current.FindResource("UiFont"), FontSize = 12.5, FontWeight = i == index ? FontWeights.SemiBold : FontWeights.Medium, Foreground = new SolidColorBrush(Theme.Text), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(6, 6, 6, 6) });
         Children.Add(labelsGrid);
         SizeChanged += (_, _) => Place(false);
         MouseLeftButtonUp += (_, e) =>
@@ -164,6 +168,7 @@ public sealed class IosSegmented : Grid
         if (ActualWidth <= 4) return;
         var w = ActualWidth / labels.Length;
         thumb.Width = Math.Max(0, w - 4);
+        thumb.Height = Math.Max(0, ActualHeight - 4);
         var to = index * w;
         if (animate) move.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(to, TimeSpan.FromMilliseconds(260)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
         else move.X = to;

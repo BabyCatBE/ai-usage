@@ -243,7 +243,7 @@ public static class Theme
             r["CardSheen"] = Grad(new Point(0.5, 0), new Point(0.5, 1), (Color.FromArgb(Dark ? (byte)0x22 : (byte)0x55, 255, 255, 255), 0), (Colors.Transparent, 0.32));
             r["CardBorderThickness"] = new Thickness(1);
             r["CardRadius"] = new CornerRadius(22); r["DockRightRadius"] = new CornerRadius(22, 0, 0, 22); r["DockLeftRadius"] = new CornerRadius(0, 22, 22, 0);
-            r["ButtonRadius"] = new CornerRadius(100); r["RoundRadius"] = new CornerRadius(20);
+            r["ButtonRadius"] = new CornerRadius(12); r["RoundRadius"] = new CornerRadius(20);   // buttons are rounded rectangles, not ovals
             r["ScrollThumb"] = B(A(Dark ? (byte)0x60 : (byte)0x50, Dim));
             r["ShadowLight"] = null; r["ShadowLightSm"] = null; r["ShadowDarkSm"] = null;
             r["ShadowDark"] = PowerSaver ? null : SoftShadow(Dark ? 0.45 : 0.14);

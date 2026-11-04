@@ -376,8 +376,8 @@ public partial class MainWindow : Window
     {
         var st = state.Settings;
         SettingsBody.Children.Clear();
-        // Cupertino look: the same iOS-style grouped list as the phone app (sections, switches, segmented controls, checkmarks)
-        var cu = Theme.Cupertino;
+        // Every look uses the same iOS-style grouped list as the phone app (sections, switches, segmented controls, checkmarks); only the colours follow the theme
+        const bool cu = true;
         var list = new SettingsList(SettingsBody);
         void Title(string t) { if (cu) list.Title(t); else SettingsBody.Children.Add(new TextBlock { Text = t, FontSize = 17, FontWeight = FontWeights.Bold, Style = (Style)FindResource("Label"), Margin = new Thickness(0, 0, 0, 6) }); }
         void Caption(string t) { if (cu) list.Section(t); else SettingsBody.Children.Add(new TextBlock { Text = t, Style = (Style)FindResource("Dim"), Margin = new Thickness(0, 10, 0, 2) }); }
@@ -385,7 +385,8 @@ public partial class MainWindow : Window
         void Put(UIElement e, double pad = 10) { if (cu) list.AddPadded(e, pad); else SettingsBody.Children.Add(e); }
         void Pick(string[] values, string[] labels, string current, Action<string> set, Action after)
         {
-            if (values.Length <= 4 || labels.All(l => l.Length <= 8))
+            // segmented only when every label fits on one line of a ~380 px row (Portuguese labels are longer): otherwise a list with checkmarks
+            if (labels.Sum(l => l.Length) <= 40 && labels.All(l => l.Length <= 14))
                 list.SegmentedRow(labels, Math.Max(0, Array.IndexOf(values, current)), i => { set(values[i]); after(); });
             else
                 for (var i = 0; i < values.Length; i++) { var v = values[i]; list.CheckRow(labels[i], v == current, () => { set(v); after(); }); }
@@ -450,7 +451,7 @@ public partial class MainWindow : Window
             Caption(isSoft ? Loc.T("Suave: escolha a paleta", "Soft: pick a palette") : Loc.T("Cyberpunk: escolha o submodo", "Cyberpunk: pick a sub-theme"));
             foreach (var dark in new[] { true, false })
             {
-                SettingsBody.Children.Add(new TextBlock { Text = dark ? Loc.T("Escuros", "Dark") : Loc.T("Claros", "Light"), Style = (Style)FindResource("Dim"), FontSize = 11, Margin = new Thickness(0, 4, 0, 0) });
+                Put(new TextBlock { Text = dark ? Loc.T("Escuros", "Dark") : Loc.T("Claros", "Light"), Style = (Style)FindResource("Dim"), FontSize = 11 }, 6);
                 var wrap = new WrapPanel();
                 foreach (var v in CyberVariant.All.Where(x => x.Dark == dark && x.Soft == isSoft))
                 {
@@ -465,7 +466,7 @@ public partial class MainWindow : Window
                     b.Click += (_, _) => { if (isSoft) st.SoftVariant = vid; else st.CyberVariant = vid; ApplyView(); };
                     wrap.Children.Add(b);
                 }
-                SettingsBody.Children.Add(wrap);
+                Put(wrap, 4);
             }
         }
         Caption(Loc.T("Layout da janela", "Window layout"));
