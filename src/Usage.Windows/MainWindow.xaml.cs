@@ -376,16 +376,30 @@ public partial class MainWindow : Window
     {
         var st = state.Settings;
         SettingsBody.Children.Clear();
-        void Title(string t) => SettingsBody.Children.Add(new TextBlock { Text = t, FontSize = 17, FontWeight = FontWeights.Bold, Style = (Style)FindResource("Label"), Margin = new Thickness(0, 0, 0, 6) });
-        void Caption(string t) => SettingsBody.Children.Add(new TextBlock { Text = t, Style = (Style)FindResource("Dim"), Margin = new Thickness(0, 10, 0, 2) });
+        // Cupertino look: the same iOS-style grouped list as the phone app (sections, switches, segmented controls, checkmarks)
+        var cu = Theme.Cupertino;
+        var list = new SettingsList(SettingsBody);
+        void Title(string t) { if (cu) list.Title(t); else SettingsBody.Children.Add(new TextBlock { Text = t, FontSize = 17, FontWeight = FontWeights.Bold, Style = (Style)FindResource("Label"), Margin = new Thickness(0, 0, 0, 6) }); }
+        void Caption(string t) { if (cu) list.Section(t); else SettingsBody.Children.Add(new TextBlock { Text = t, Style = (Style)FindResource("Dim"), Margin = new Thickness(0, 10, 0, 2) }); }
+        void Note(TextBlock t) { if (cu) list.Footer(t.Text); else SettingsBody.Children.Add(t); }
+        void Put(UIElement e, double pad = 10) { if (cu) list.AddPadded(e, pad); else SettingsBody.Children.Add(e); }
+        void Pick(string[] values, string[] labels, string current, Action<string> set, Action after)
+        {
+            if (values.Length <= 4 || labels.All(l => l.Length <= 8))
+                list.SegmentedRow(labels, Math.Max(0, Array.IndexOf(values, current)), i => { set(values[i]); after(); });
+            else
+                for (var i = 0; i < values.Length; i++) { var v = values[i]; list.CheckRow(labels[i], v == current, () => { set(v); after(); }); }
+        }
         void Check(string text, bool value, Action<bool> set)
         {
+            if (cu) { list.SwitchRow(text, value, v => { set(v); Apply(); }); return; }
             var c = new CheckBox { Content = text, IsChecked = value, Style = (Style)FindResource("NeuCheck") };
             c.Click += (_, _) => { set(c.IsChecked == true); Apply(); };
             SettingsBody.Children.Add(c);
         }
         void Choice(string[] values, string[] labels, string current, Action<string> set)
         {
+            if (cu) { Pick(values, labels, current, set, () => { Apply(); BuildSettings(); }); return; }
             var panel = new WrapPanel();
             for (var i = 0; i < values.Length; i++)
             {
@@ -411,6 +425,7 @@ public partial class MainWindow : Window
         // ---- visualization: layout, providers, indicators ----
         void ViewChoice(string[] values, string[] labels, string current, Action<string> set)
         {
+            if (cu) { Pick(values, labels, current, set, ApplyView); return; }
             var panel = new WrapPanel();
             for (var i = 0; i < values.Length; i++)
             {
@@ -424,6 +439,7 @@ public partial class MainWindow : Window
         }
         void ViewCheck(string text, bool value, Action<bool> set)
         {
+            if (cu) { list.SwitchRow(text, value, v => { set(v); ApplyView(); }); return; }
             var c = new CheckBox { Content = text, IsChecked = value, Style = (Style)FindResource("NeuCheck") };
             c.Click += (_, _) => { set(c.IsChecked == true); ApplyView(); };
             SettingsBody.Children.Add(c);
@@ -454,7 +470,7 @@ public partial class MainWindow : Window
         }
         Caption(Loc.T("Layout da janela", "Window layout"));
         ViewChoice(["fit", "scroll"], [Loc.T("Ver todos (ajusta ao tamanho)", "See all (fits the window)"), Loc.T("Destaques + rolagem", "Highlights + scrolling")], st.LayoutMode, v => st.LayoutMode = v);
-        SettingsBody.Children.Add(new TextBlock
+        Note(new TextBlock
         {
             Style = (Style)FindResource("Dim"), TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.None, FontSize = 11, Margin = new Thickness(0, 0, 0, 2),
             Text = st.LayoutMode == "scroll"
@@ -488,6 +504,7 @@ public partial class MainWindow : Window
         Caption(Loc.T("Ícones dos provedores", "Provider icons"));
         void IconCheck()
         {
+            if (cu) { list.SwitchRow(Loc.T("Mostrar ícones", "Show icons"), st.ShowIcons, v => { st.ShowIcons = v; Apply(false); BuildSettings(); }); return; }
             var c = new CheckBox { Content = Loc.T("Mostrar ícones", "Show icons"), IsChecked = st.ShowIcons, Style = (Style)FindResource("NeuCheck") };
             c.Click += (_, _) => { st.ShowIcons = c.IsChecked == true; Apply(false); BuildSettings(); };
             SettingsBody.Children.Add(c);
@@ -496,7 +513,8 @@ public partial class MainWindow : Window
         if (st.ShowIcons)
             foreach (var (pid, pname) in IconCatalog.Providers)
             {
-                SettingsBody.Children.Add(new TextBlock { Text = pname, Style = (Style)FindResource("Dim"), Margin = new Thickness(0, 6, 0, 0) });
+                if (cu) list.Add(new TextBlock { Text = pname, FontFamily = (FontFamily)FindResource("UiFont"), FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextBrush"), Margin = new Thickness(16, 10, 0, 0) });
+                else SettingsBody.Children.Add(new TextBlock { Text = pname, Style = (Style)FindResource("Dim"), Margin = new Thickness(0, 6, 0, 0) });
                 var wrap = new WrapPanel();
                 var current = IconCatalog.Resolve(pid, st.Icons);
                 foreach (var opt in IconCatalog.Options(pid))
@@ -510,7 +528,7 @@ public partial class MainWindow : Window
                     b.Click += (_, _) => { st.Icons[prov] = oid; Apply(false); BuildSettings(); };
                     wrap.Children.Add(b);
                 }
-                SettingsBody.Children.Add(wrap);
+                Put(wrap, 4);
             }
         Caption(Loc.T("Widget flutuante", "Floating widget"));
         Check(Loc.T("Mostrar o widget no canto da tela", "Show the widget on a screen corner"), st.WidgetEnabled, v => st.WidgetEnabled = v);
@@ -532,8 +550,8 @@ public partial class MainWindow : Window
             if (t.StartsWith("wss://") || t.StartsWith("ws://")) { st.RelayUrl = t.TrimEnd('/'); st.Save(); }
             else relay.Text = st.RelayUrl;
         };
-        SettingsBody.Children.Add(relay);
-        SettingsBody.Children.Add(new TextBlock
+        Put(relay, 8);
+        Note(new TextBlock
         {
             Style = (Style)FindResource("Dim"), TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.None, Margin = new Thickness(0, 6, 0, 0),
             Text = Loc.T("Altere só se você hospeda o próprio relay. Reinicie o app para reconectar os celulares.", "Change only if you host your own relay. Restart the app to reconnect phones."),
