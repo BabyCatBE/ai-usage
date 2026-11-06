@@ -9,6 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>UsageMonitor</AssemblyName>
     <RootNamespace>Usage.Windows</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <ServerGarbageCollector>false</ServerGarbageCollector>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
