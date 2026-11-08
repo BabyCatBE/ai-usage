@@ -326,6 +326,14 @@ public partial class FloatingWidget : Window
         return c.DesiredSize.Width > 0 ? c.DesiredSize.Width : 332;
     }
 
+    /// <summary>The popup's own Height can be 0 / stale (its child was just swapped): measure the content instead.</summary>
+    static double MeasuredHeight(Popup pop)
+    {
+        if (pop.Child is not FrameworkElement c) return 0;
+        c.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return c.DesiredSize.Height > 0 ? c.DesiredSize.Height : 0;
+    }
+
     /// <summary>Beside the hovered row, clamped to the work area so it never slides over the widget itself.</summary>
     CustomPopupPlacement[] PlaceDetail(Size popup, Size target, Point offset)
     {
@@ -334,7 +342,7 @@ public partial class FloatingWidget : Window
         var m = src?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
         var surfTop = Surface.PointToScreen(new Point(0, 0)).Y / m.M22;
         var rowTop = detailTarget is { IsLoaded: true } t ? t.PointToScreen(new Point(0, 0)).Y / m.M22 : surfTop;
-        var y = Math.Min(Math.Max(rowTop, wa.Top), Math.Max(wa.Top, wa.Bottom - popup.Height)) - surfTop;
+        var y = Math.Min(Math.Max(rowTop, wa.Top), Math.Max(wa.Top, wa.Bottom - MeasuredHeight(Detail))) - surfTop;
         // popup.Size can be 0 / stale while the popup is being (re)placed (its child was just swapped): measure the content ourselves
         var pw = popup.Width > 40 ? popup.Width : MeasuredWidth(Detail);
         var x = DockedRight ? -pw + 16 : target.Width - 16;   // card edge flush with the widget
@@ -349,8 +357,13 @@ public partial class FloatingWidget : Window
         var m = src?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
         var surfTop = Surface.PointToScreen(new Point(0, 0)).Y / m.M22;
         var surfLeft = Surface.PointToScreen(new Point(0, 0)).X / m.M11;
-        var rowTop = detailTarget is { IsLoaded: true } t ? t.PointToScreen(new Point(0, 0)).Y / m.M22 : surfTop;
-        var y = Math.Min(Math.Max(rowTop, wa.Top), Math.Max(wa.Top, wa.Bottom - popup.Height)) - surfTop;
+        // the forecast is shorter than the detail: anchor its top on the detail's real top instead of re-clamping with a
+        // popup height that can still be 0 / stale while the child is being swapped (that used to push it upwards)
+        var detailTop = Detail.Child is FrameworkElement dc && dc.IsLoaded
+            ? dc.PointToScreen(new Point(0, 0)).Y / m.M22
+            : detailTarget is { IsLoaded: true } t ? t.PointToScreen(new Point(0, 0)).Y / m.M22
+            : surfTop;
+        var y = detailTop - surfTop;
         var detailW = MeasuredWidth(Detail);
         var fw = popup.Width > 40 ? popup.Width : MeasuredWidth(Forecast);
         var x = DockedRight ? -(detailW + fw) + 48 : target.Width + detailW - 48;   // forecast card edge flush with the detail card edge (16 px margin each side; the detail itself is shifted 16)

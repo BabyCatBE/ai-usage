@@ -13,7 +13,7 @@ public sealed class UsageService : IDisposable
     public static readonly TimeSpan ProviderTimeout = TimeSpan.FromSeconds(75);
 
     readonly IReadOnlyList<IUsageProvider> providers;
-    readonly string file;
+    readonly string file, historyFile;
     readonly object gate = new();
     readonly Dictionary<string, List<HistoryPoint>> history = [];
     readonly object historyLock = new();
@@ -30,7 +30,9 @@ public sealed class UsageService : IDisposable
         this.providers = providers.ToList();
         Directory.CreateDirectory(dataDir);
         file = Path.Combine(dataDir, "snapshot.json");
+        historyFile = Path.Combine(dataDir, "history.json");
         Current = LoadCached();
+        LoadHistory();
     }
 
     UsageSnapshot? LoadCached()
@@ -149,6 +151,38 @@ public sealed class UsageService : IDisposable
                     list.Add(new HistoryPoint(s.GeneratedAt, w.UsedPercent!.Value));
                     list.RemoveAll(x => x.At < cutoff);
                 }
+        PersistHistory();
+    }
+
+    /// <summary>Loads the persisted history so the 24 h chart and the forecast survive an app restart (best-effort).</summary>
+    void LoadHistory()
+    {
+        try
+        {
+            var loaded = Json.Deserialize<Dictionary<string, List<HistoryPoint>>>(File.ReadAllText(historyFile, Encoding.UTF8));
+            if (loaded is null) return;
+            var cutoff = DateTimeOffset.UtcNow - TimeSpan.FromHours(24);
+            lock (historyLock)
+                foreach (var (key, points) in loaded)
+                {
+                    var kept = points.Where(p => p.At >= cutoff).OrderBy(p => p.At).ToList();
+                    if (kept.Count > 0) history[key] = kept;
+                }
+        }
+        catch { /* the history is best-effort */ }
+    }
+
+    void PersistHistory()
+    {
+        try
+        {
+            string json;
+            lock (historyLock) json = Json.Serialize(history);
+            var tmp = historyFile + ".tmp";
+            File.WriteAllText(tmp, json, new UTF8Encoding(false));
+            File.Move(tmp, historyFile, overwrite: true);
+        }
+        catch { /* the history is best-effort */ }
     }
 
     public IReadOnlyList<HistoryPoint> History(string providerId, string windowId)

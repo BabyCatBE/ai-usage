@@ -200,8 +200,10 @@ public sealed class Sparkline : ThemedElement
         dc.DrawRoundedRectangle(Fill(WithAlpha(Theme.Shade, Theme.Dark ? (byte)120 : (byte)45)), null, new Rect(0, 0, w, h), 8, 8);
         var pts = Points;
         if (pts is null || pts.Count < 2) return;
-        var t0 = pts[0].At; var span = Math.Max(1, (pts[^1].At - t0).TotalSeconds);
-        Point P(HistoryPoint p) => new(6 + (w - 12) * (p.At - t0).TotalSeconds / span, h - 6 - (h - 12) * Math.Clamp(p.Percent, 0, 100) / 100);
+        // fixed 24 h window ending at the latest reading: a short history leaves the left side empty instead of stretching
+        // a few minutes across the whole width (the label says 24 h, so the axis must mean 24 h)
+        var t1 = pts[^1].At; var t0 = t1 - TimeSpan.FromHours(24); const double span = 24 * 3600;
+        Point P(HistoryPoint p) => new(6 + (w - 12) * Math.Clamp((p.At - t0).TotalSeconds / span, 0, 1), h - 6 - (h - 12) * Math.Clamp(p.Percent, 0, 100) / 100);
         var fig = new PathFigure(P(pts[0]), pts.Skip(1).Select(p => (PathSegment)new LineSegment(P(p), true)), false);
         dc.DrawGeometry(null, new Pen(Fill(Accent), 2) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round }, new PathGeometry([fig]));
     }
