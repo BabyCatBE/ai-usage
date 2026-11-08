@@ -19,16 +19,16 @@ public partial class FloatingWidget : Window
     const int GWL_EXSTYLE = -20, WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x80;
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+    static readonly IntPtr HWND_TOPMOST = new(-1), HWND_NOTOPMOST = new(-2);
+    const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010;
 
     readonly AppState state;
     readonly DispatcherTimer collapseTimer = new() { Interval = TimeSpan.FromMilliseconds(380) };
     readonly DispatcherTimer detailTimer = new() { Interval = TimeSpan.FromMilliseconds(220) };
     bool expanded, dirty;
-    /// <summary>Hover intent: a popup only opens once the pointer has rested on its trigger and the widget has finished growing/moving.</summary>
-    readonly DispatcherTimer showTimer = new() { Interval = TimeSpan.FromMilliseconds(110) };
     readonly DispatcherTimer forecastTimer = new() { Interval = TimeSpan.FromMilliseconds(160) };
     long settleUntil;
-    ProviderVM? pendingP; FrameworkElement? pendingBox;
     FrameworkElement? pendingForecastWrap; ProviderVM? pendingForecastP;
     ProviderVM? detailFor, forecastFor;
     /// <summary>Stage 4: the forecast opens beside the detail popup, which stays visible.</summary>
@@ -89,6 +89,9 @@ public partial class FloatingWidget : Window
         {
             var h = new WindowInteropHelper(this).Handle;
             SetWindowLong(h, GWL_EXSTYLE, GetWindowLong(h, GWL_EXSTYLE) | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
+            // SetWindowLong(GWL_EXSTYLE) takes the window out of the topmost band (the WS_EX_TOPMOST bit stays):
+            // put it back where this stage belongs (collapsed = behind windows, expanded = above them).
+            ApplyStageTopmost();
         };
         SizeChanged += (_, _) => { Reposition(); ApplyGlass(); RePlacePopups(); };
         LocationChanged += (_, _) => RePlacePopups();
@@ -97,15 +100,6 @@ public partial class FloatingWidget : Window
         // the pointer may be over the detail / forecast popup (a separate window): keep everything open while it is
         collapseTimer.Tick += (_, _) => { collapseTimer.Stop(); if (OverPopup) return; SetExpanded(false); };
         detailTimer.Tick += (_, _) => { detailTimer.Stop(); if (OverPopup) return; CloseDetail(); };
-        showTimer.Tick += (_, _) =>
-        {
-            showTimer.Stop();
-            if (pendingP is null || pendingBox is null) return;
-            if (!pendingBox.IsMouseOver || !expanded) { pendingP = null; pendingBox = null; return; }
-            if (Environment.TickCount64 < settleUntil) { showTimer.Start(); return; }   // still growing/moving: wait, then place against the final geometry
-            var (p, b) = (pendingP, pendingBox); pendingP = null; pendingBox = null;
-            ShowDetail(p, b);
-        };
         forecastTimer.Tick += (_, _) =>
         {
             forecastTimer.Stop();
@@ -157,9 +151,32 @@ public partial class FloatingWidget : Window
         Theme.ApplyLayeredBlur(this, rect, radius * dpi.DpiScaleX);
     }
 
+    /// <summary>
+    /// Collapsed: behind normal windows, so it only shows over the desktop (a maximized window hides it).
+    /// Expanded: above the window the pointer came from, because the user reached the widget from outside that window.
+    /// </summary>
+    void ApplyStageTopmost()
+    {
+        var on = expanded && state.Settings.WidgetAlwaysOnTop;
+        Topmost = on;
+        ForceTopmost(on);
+    }
+
+    /// <summary>
+    /// SetWindowLong(GWL_EXSTYLE) leaves WS_EX_TOPMOST set but drops the window out of the topmost band, and assigning
+    /// Topmost = true again does not reapply it (the property value did not change). SetWindowPos is what actually moves
+    /// the window into (or out of) that band.
+    /// </summary>
+    void ForceTopmost(bool on)
+    {
+        var h = new WindowInteropHelper(this).Handle;
+        if (h == IntPtr.Zero) return;
+        SetWindowPos(h, on ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
     public void ApplySettings()
     {
-        Topmost = state.Settings.WidgetAlwaysOnTop;
+        ApplyStageTopmost();
         ContextMenu = BuildMenu();
         Surface.Template = (ControlTemplate)FindResource(DockedRight ? "DockRightTemplate" : "DockLeftTemplate");
         Root.Margin = DockedRight ? new Thickness(16, 16, 0, 16) : new Thickness(0, 16, 16, 16);
@@ -197,7 +214,8 @@ public partial class FloatingWidget : Window
         expanded = value;
         Collapsed.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
         Expanded.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
-        showTimer.Stop(); forecastTimer.Stop(); pendingP = null; pendingBox = null; pendingForecastP = null; pendingForecastWrap = null;
+        ApplyStageTopmost();   // collapsed: behind windows (desktop only); expanded: above the window the pointer came from
+        forecastTimer.Stop(); pendingForecastP = null; pendingForecastWrap = null;
         if (!value) { detailTimer.Stop(); CloseDetail(); }
         // the window resizes and moves a few frames from now: no popup may open until that is over
         settleUntil = Environment.TickCount64 + 280;
@@ -278,16 +296,23 @@ public partial class FloatingWidget : Window
             stack.Children.Add(g);
         }
         box.Child = stack;
+        box.Cursor = Cursors.Hand;   // stage 3 opens on click, not on hover
         box.MouseEnter += (_, _) =>
         {
             detailTimer.Stop(); box.Background = (Brush)FindResource("ShadeBrush");
-            if (ReferenceEquals(detailFor, p) && Detail.IsOpen) return;   // already showing this provider
-            pendingP = p; pendingBox = box; showTimer.Stop(); showTimer.Start();
         };
         box.MouseLeave += (_, _) =>
         {
             box.Background = Brushes.Transparent; detailTimer.Start();
-            if (ReferenceEquals(pendingBox, box)) { showTimer.Stop(); pendingP = null; pendingBox = null; }
+        };
+        box.MouseLeftButtonUp += (_, e) =>
+        {
+            if (e.ClickCount > 1) return;
+            e.Handled = true;
+            collapseTimer.Stop(); detailTimer.Stop();
+            if (ReferenceEquals(detailFor, p) && Detail.IsOpen) { CloseDetail(); return; }   // click again closes
+            if (Environment.TickCount64 < settleUntil) return;   // still growing/moving: ignore, click again
+            ShowDetail(p, box);
         };
         return box;
     }
