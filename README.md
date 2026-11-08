@@ -4,10 +4,10 @@
 
 **Português:** [role para a seção em português](#português)
 
-- Three looks: **soft neumorphism**, **liquid glass** (Apple-style rim and sheen, opaque fallback when Windows transparency is off) and **cyberpunk** with 9 sub-themes (5 dark, 4 light). Light, dark or automatic mode (Windows and Android).
+- Six looks: **soft neumorphism**, **liquid glass** (Apple-style rim and sheen, opaque fallback when Windows transparency is off), **cyberpunk** with 9 sub-themes (5 dark, 4 light), **Mono** (monochrome neumorphism), **Soft** (4 palettes) and **Cupertino** (Apple design, real Liquid Glass on Android and Acrylic on Windows). Light, dark or automatic mode (Windows and Android).
 - **Windows layout modes**: *see all* (reflows to 1-3 columns and switches to denser cards as the window shrinks, never below a readable size, then scrolls) or *highlights + scrolling* (starred providers first). Show or hide each provider, and pick the indicator style: bars, segments, rings or numbers.
 - **Light on a weak PC**: power-saver mode (no blur effects, low priority, Windows efficiency mode while hidden, 30 fps), automatic refresh pauses while you are away, nothing is redrawn while the window is hidden (about 0.01% CPU in the tray).
-- **Windows floating widget** docked to the middle of the right (or left) screen edge as a thin retracted tab, so it never covers window buttons: hover to expand every window of every provider, hover a provider for a detailed report (all windows, elapsed time, models, 24 h history).
+- **Windows floating widget** docked to the middle of the right (or left) screen edge as a thin retracted tab, so it never covers window buttons: the retracted tab stays behind normal windows (visible on the desktop), hovering brings the expanded panel to the front, clicking a provider opens the detailed report (all windows, elapsed time, models, 24 h history), and hovering the report shows the forecast.
 - **Provider icons** (ChatGPT/Codex, Claude/Claude Code mascot, OpenCode or a Go-plan model letter) with an on/off switch, on the widgets and in both apps.
 - **Windows app** that reflows from one to three columns, made to live in a split-screen on a second monitor.
 - **Android app + widget** that works at home *and* away, with no VPN, no database and no account.
@@ -38,7 +38,7 @@ cd android; ./gradlew :app:testDebugUnitTest :app:assembleDebug
 The PC opens an **outbound** WebSocket to a tiny **relay** (works behind routers and CGNAT — no port forwarding, no VPN). The phone connects to the same room. Everything is encrypted end to end with a key derived from the pairing secret (AES-256-GCM, HKDF-SHA256), so the relay only forwards opaque bytes, keeps nothing on disk, and cannot read your data. Each paired phone has its own secret and room; removing it on the PC revokes it. Details: [docs/protocol.md](docs/protocol.md).
 
 - The default relay is a free Cloudflare Worker run by the project maintainer. **You can run your own** in a minute: `cd relay/worker && npx wrangler deploy`, then set the URL in *Settings → Relay* (PC) — pairing links carry it to the phone.
-- Want it 24/7 with the PC off? Run the headless hub on a VPS: [docs/vps.md](docs/vps.md).
+- Want it 24/7 with the PC off? Run the headless hub on a VPS or on a Windows machine: [docs/vps.md](docs/vps.md) / [docs/windows-hub.md](docs/windows-hub.md).
 
 ## Providers
 
@@ -67,14 +67,14 @@ MIT — see [LICENSE](LICENSE).
 
 Mostra quanto você já usou dos limites do **ChatGPT (Codex)**, **Claude** e **OpenCode Go** — janelas de 5 horas, semanal e mensal, e por modelo/produto quando o provedor informa — em um **widget flutuante do Windows**, um **app Windows** e um **app + widget Android**.
 
-- Dois visuais, **neumorphism suave** e **liquid glass**, cada um com modo claro, escuro ou automático.
-- **Widget flutuante** fixo num canto: passe o mouse para expandir; passe o mouse num provedor para o relatório detalhado.
+- Seis visuais: **neumorphism suave**, **liquid glass**, **cyberpunk** (9 submodos), **Mono**, **Soft** (4 paletas) e **Cupertino** (design Apple), cada um com modo claro, escuro ou automático.
+- **Widget flutuante** fixo num canto: o retraído fica atrás das janelas (visível na área de trabalho), o mouse traz o expandido para a frente, o clique num provedor abre o relatório detalhado e o mouse sobre o relatório mostra a previsão.
 - **App Windows** responsivo (1 a 3 colunas), feito para ficar numa tela secundária dividida com outros apps.
 - **App e widget Android** que funcionam em casa e fora dela, **sem VPN, sem banco de dados e sem conta**.
 - **Privado**: nunca lê arquivos de credenciais; pergunta os números às CLIs oficiais. O link com o celular é criptografado de ponta a ponta.
 
 **Instalação:** baixe o `UsageMonitor.exe` (requer .NET 10 Desktop Runtime) e o APK na página de releases. No PC: **Celular → Gerar código de pareamento**; no Android: **Escanear QR** (ou cole o código) e **Adicionar widget**. Faça login nas CLIs que você usa (`codex login`, `claude auth login`, `opencode auth login`).
 
-**Conexão de qualquer lugar:** o PC abre uma conexão *de saída* com um relay minúsculo (passa por roteador/CGNAT, sem abrir portas). Tudo é cifrado com uma chave derivada do código de pareamento; o relay só repassa bytes ilegíveis. Você pode hospedar seu próprio relay (`relay/worker`) ou rodar o hub numa VPS para funcionar 24 h ([docs/vps.md](docs/vps.md)).
+**Conexão de qualquer lugar:** o PC abre uma conexão *de saída* com um relay minúsculo (passa por roteador/CGNAT, sem abrir portas). Tudo é cifrado com uma chave derivada do código de pareamento; o relay só repassa bytes ilegíveis. Você pode hospedar seu próprio relay (`relay/worker`) ou rodar o hub numa VPS ou numa máquina Windows para funcionar 24 h ([docs/vps.md](docs/vps.md) / [docs/windows-hub.md](docs/windows-hub.md)).
 
 **Limitações:** o widget Android atualiza a cada ~15 min (mínimo do Android) e na hora ao tocar ↻ com o PC ligado; com o PC desligado (e sem VPS) mostra o último dado salvo.
