@@ -98,7 +98,8 @@ public partial class FloatingWidget : Window
         Theme.Changed += () => Dispatcher.BeginInvoke(ApplyGlass);
         Loaded += (_, _) => { Fit(); ApplyGlass(); };
         // the pointer may be over the detail / forecast popup (a separate window): keep everything open while it is
-        collapseTimer.Tick += (_, _) => { collapseTimer.Stop(); if (OverPopup) return; SetExpanded(false); };
+        // ...and while the right-click menu (also a separate window) is open: collapse only after it closes
+        collapseTimer.Tick += (_, _) => { collapseTimer.Stop(); if (OverPopup || ContextMenu?.IsOpen == true) return; SetExpanded(false); };
         detailTimer.Tick += (_, _) => { detailTimer.Stop(); if (OverPopup) return; CloseDetail(); };
         forecastTimer.Tick += (_, _) =>
         {
@@ -125,6 +126,9 @@ public partial class FloatingWidget : Window
     ContextMenu BuildMenu()
     {
         var m = new ContextMenu();
+        // opening the menu moves the pointer onto another window (Root.MouseLeave): keep the panel expanded meanwhile
+        m.Opened += (_, _) => collapseTimer.Stop();
+        m.Closed += (_, _) => { if (!Root.IsMouseOver && !OverPopup) collapseTimer.Start(); };
         MenuItem Item(string t, Action a) { var i = new MenuItem { Header = t }; i.Click += (_, _) => a(); return i; }
         var app = (App)Application.Current;
         m.Items.Add(Item(Loc.T("Abrir", "Open"), app.ShowMain));
